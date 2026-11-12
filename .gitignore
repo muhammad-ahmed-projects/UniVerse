@@ -21,6 +21,10 @@ build/
 *.weights
 /backend/app/ai/models/
 
+# Biometric data (face embeddings) -- never commit
+**/face_db/
+*.pkl
+
 # Logs
 *.log
 npm-debug.log*

@@ -79,3 +79,49 @@ needed for the Hungarian-algorithm assignment).
 **Verdict:** PASS for ID stability (0 switches on a continuously-visible
 person, recorded clip + live webcam). Multi-person/occlusion re-test
 recommended before Phase 6.
+
+## Face Recognition (Phase 1, step 3)
+
+**Module:** `backend/app/ai/prototypes/face_recognition.py` — InsightFace
+`buffalo_l` (pretrained detection + ArcFace embeddings), cosine similarity
+match against a local, gitignored embeddings store
+(`app/ai/prototypes/face_db/embeddings.pkl` — biometric data, never
+committed), configurable similarity threshold (default 0.45).
+
+**Test 1 — registration + known-face recognition:**
+- Registered 1 team member ("Ahmed") by averaging embeddings over 15
+  webcam frames.
+- Re-ran recognition live on webcam (40 frames, ~1.2 FPS on CPU — face
+  detection at 640x640 + embedding is heavier than person detection):
+  correctly labeled "Ahmed" every frame a face was visible, similarity
+  0.75.
+
+**Test 2 — unknown-face rejection** (2 static images, 4 unregistered
+faces total, none in the DB):
+- `zidane.jpg`: 2 faces, both correctly labeled "Unknown" (scores 0.10,
+  0.06 -- well below the 0.45 threshold).
+- `bus.jpg`: 2 of 3 visible faces detected (one obscured by sunglasses/
+  angle), both correctly labeled "Unknown" (scores 0.00).
+- **4/4 unknown faces correctly rejected.**
+
+**Coverage vs. Section 12's requirement ("3+ registered faces + 2+
+unknown"):**
+- Unknown-rejection: fully covered (4/4 correct).
+- Known-face recognition: only **1 of 3** team members registered so
+  far (Khawaja Shees Uddin and Aiman Shahid still need to register) --
+  this module is **not fully verified yet**. The checklist item stays
+  unchecked until all 3 team members register and a mixed known/unknown
+  session is re-run.
+
+**Notes:**
+- Registration and the embeddings DB are separate from this test's
+  temporary images -- the DB only ever holds explicitly registered team
+  members' embeddings, per the proposal's consent-based registration
+  requirement.
+- Threshold (0.45) is a starting point based on this single test; revisit
+  once all 3 team members are registered and a larger true/false match
+  rate can be measured.
+
+**Verdict:** PARTIAL PASS -- unknown rejection verified, known-face
+recognition verified for 1/3 planned registered faces. Re-test with all
+3 team members before marking this module done.

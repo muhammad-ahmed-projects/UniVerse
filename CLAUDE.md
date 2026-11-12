@@ -349,7 +349,11 @@ all seven behaviors against the webcam, each one individually testable.
 - [x] Person detection prototype (YOLO + webcam) — see
   `/docs/evaluation-results.md`; ~6 FPS (clip) / ~4.3 FPS (live webcam) on
   CPU with YOLOv8n, stable boxes on recorded clip + live webcam
-- [ ] Face recognition prototype (InsightFace)
+- [ ] Face recognition prototype (InsightFace) — IN PROGRESS: script
+  done (`backend/app/ai/prototypes/face_recognition.py`), unknown-face
+  rejection verified (4/4 correct), but only 1 of 3 team members
+  registered so far — see `/docs/evaluation-results.md`; needs Khawaja
+  and Aiman to register before this can be checked off
 - [x] Tracking (ByteTrack, via Ultralytics `model.track()`) merged with
   detection — see `/docs/evaluation-results.md`; 0 ID switches on a
   continuously-visible person (recorded clip + live webcam); multi-
