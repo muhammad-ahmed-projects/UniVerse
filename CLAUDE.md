@@ -346,7 +346,9 @@ all seven behaviors against the webcam, each one individually testable.
   created and reachable via SQLAlchemy, frontend `npm run dev` returns 200
 - [x] TailAdmin template integrated as frontend base — runs unmodified,
   no customization yet
-- [ ] Person detection prototype (YOLO + webcam)
+- [x] Person detection prototype (YOLO + webcam) — see
+  `/docs/evaluation-results.md`; ~6 FPS (clip) / ~4.3 FPS (live webcam) on
+  CPU with YOLOv8n, stable boxes on recorded clip + live webcam
 - [ ] Face recognition prototype (InsightFace)
 - [ ] Tracking (DeepSORT/ByteTrack) merged with detection
 - [ ] Restricted-area (ROI) + loitering logic
