@@ -350,7 +350,10 @@ all seven behaviors against the webcam, each one individually testable.
   `/docs/evaluation-results.md`; ~6 FPS (clip) / ~4.3 FPS (live webcam) on
   CPU with YOLOv8n, stable boxes on recorded clip + live webcam
 - [ ] Face recognition prototype (InsightFace)
-- [ ] Tracking (DeepSORT/ByteTrack) merged with detection
+- [x] Tracking (ByteTrack, via Ultralytics `model.track()`) merged with
+  detection — see `/docs/evaluation-results.md`; 0 ID switches on a
+  continuously-visible person (recorded clip + live webcam); multi-
+  person/occlusion re-test still pending before Phase 6
 - [ ] Restricted-area (ROI) + loitering logic
 - [ ] Camera tamper detection (covered/moved/defocused)
 - [ ] Camera health monitoring (offline/feed loss/power loss)

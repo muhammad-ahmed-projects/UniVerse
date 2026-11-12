@@ -18,6 +18,7 @@ httpx==0.28.1
 idna==3.20
 Jinja2==3.1.6
 kiwisolver==1.5.1
+lap==0.5.14
 Mako==1.4.3
 MarkupSafe==3.0.4
 matplotlib==3.11.2

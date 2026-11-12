@@ -43,3 +43,39 @@ webcam, 170 frames, CPU inference):
 
 **Verdict:** PASS — bounding boxes are stable on both a recorded clip and
 live webcam, per Section 12's testing requirement for this module.
+
+## Tracking (Phase 1, step 2)
+
+**Module:** `backend/app/ai/prototypes/tracking.py` — YOLOv8n detection +
+Ultralytics' built-in ByteTrack (`model.track(..., persist=True)`), person
+class only. Chosen over DeepSORT: no extra appearance-embedding model to
+run, since CPU inference is already the bottleneck (~6-7 FPS from the
+detection-only prototype); ByteTrack is motion/IoU-based and ships with
+`ultralytics` already (auto-installed its one extra dependency, `lap`,
+needed for the Hungarian-algorithm assignment).
+
+**Test 1 — recorded test clip** (10s, team's own webcam, 290 frames):
+- Single person present throughout. Track ID assigned once (`ID 1`) and
+  held for the entire clip — **0 ID switches** across 290 frames.
+- Confidence on the tracked box: 0.88 (start) -> 0.94 (end).
+- Throughput: 290 frames in 61.5s -> **avg 4.7 FPS end-to-end** (includes
+  one-time ~10s auto-install of the `lap` dependency on first run).
+
+**Test 2 — live webcam** (60 frames):
+- Same result: single ID (`ID 1`) held for all 60 frames, 0 switches.
+- Throughput: 60 frames in 13.5s -> **avg 4.4 FPS end-to-end**.
+
+**Notes:**
+- Both tests used a single person in frame (no multi-person or
+  occlusion scenario yet) — confirms ID *stability* over time, not
+  ID *re-acquisition* after occlusion/exit-reentry. ByteTrack is expected
+  to assign a **new** ID if a person fully leaves the frame and re-enters
+  (no appearance re-identification) — this is expected behavior, not a
+  bug, and should be tested explicitly with multiple people / an
+  occlusion scenario before Phase 6's full evaluation pass.
+- Tracker config (`bytetrack.yaml` vs `botsort.yaml`), confidence
+  threshold, and source are CLI-configurable.
+
+**Verdict:** PASS for ID stability (0 switches on a continuously-visible
+person, recorded clip + live webcam). Multi-person/occlusion re-test
+recommended before Phase 6.
