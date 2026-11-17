@@ -38,6 +38,7 @@ curl -X POST http://127.0.0.1:8000/auth/register \
 | POST | `/cameras` | admin | `{name, location?, stream_source}`. |
 | PUT | `/cameras/{id}` | admin | Partial update. Broadcasts `camera_status` over WS if `status` changes. |
 | DELETE | `/cameras/{id}` | admin | 204 on success. |
+| POST | `/cameras/{id}/heartbeat` | any | `{status: "online" \| "offline"}` from `camera_health.py`. Updates `status` (and `last_seen_at` when online); broadcasts `camera_status` only when the status changes. |
 | GET | `/cameras/{id}/settings` | any | Returns ROI/loiter/tamper thresholds; creates a default row on first read. |
 | PUT | `/cameras/{id}/settings` | admin | Upserts all 9 threshold fields (see `camera_settings` schema). ROI validated so `x1<x2` and `y1<y2`. |
 
@@ -50,6 +51,11 @@ curl -X POST http://127.0.0.1:8000/cameras \
 ```
 
 `CameraStatus` enum: `online`, `offline`, `unknown`.
+
+Credentials embedded in `stream_source` (`rtsp://user:pass@host/...`) are
+stored as given but always returned masked (`rtsp://user:***@host/...`).
+The AI scripts receive the real source through their `--source` flag, so
+the API never needs to hand the password back out.
 
 ## People (registered faces -- consent records)
 
@@ -64,7 +70,7 @@ curl -X POST http://127.0.0.1:8000/cameras \
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/alerts` | any | Query params: `camera_id`, `unresolved_only` (bool). |
+| GET | `/alerts` | any | Newest first. Query params: `camera_id`, `unresolved_only` (bool), `limit` (1-500, default 100), `offset`. |
 | GET | `/alerts/{id}` | any | 404 if missing. |
 | POST | `/alerts` | any | Creates an alert, broadcasts `{"type": "alert", ...}` over WS. This is what the AI scripts call via `backend_client.py`. |
 
@@ -74,28 +80,38 @@ curl -X POST http://127.0.0.1:8000/alerts \
   -d '{"camera_id": 1, "alert_type": "ROI_ENTRY", "priority": "medium", "message": "Person entered restricted area"}'
 ```
 
-`priority` must be one of `low`, `medium`, `high` (`ALLOWED_PRIORITIES`).
+`priority` must be one of `low`, `medium`, `high` (anything else is a 422).
+
+Alert types emitted by the AI scripts: `ROI_ENTRY`, `LOITERING`,
+`TAMPER_COVERED`, `TAMPER_MOVED`, `TAMPER_DEFOCUSED`, `CAMERA_OFFLINE`,
+`CAMERA_ONLINE`, `UNKNOWN_FACE`.
 
 ## Incidents (human-reviewed)
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/incidents` | any | Query param: `status` (`open`/`acknowledged`/`resolved`). |
+| GET | `/incidents` | any | Newest first. Query params: `status` (`open`/`acknowledged`/`resolved`, else 422), `limit` (1-500, default 100), `offset`. |
 | GET | `/incidents/{id}` | any | 404 if missing. |
-| POST | `/incidents` | any | Promotes an alert to an incident. `{camera_id, title, description?, priority?, source_alert_id?}`. 400 if `source_alert_id` is already linked to another incident. |
+| POST | `/incidents` | any | Promotes an alert to an incident. `{camera_id, title, description?, priority?, source_alert_id?}`. 400 if `source_alert_id` doesn't exist, belongs to a different camera, or is already linked to an incident. Broadcasts `incident_update`. |
 | PATCH | `/incidents/{id}/acknowledge` | any | 400 if not currently `open`. Broadcasts `incident_update`. |
-| PATCH | `/incidents/{id}/resolve` | any | 400 if already `resolved`. Broadcasts `incident_update`. |
+| PATCH | `/incidents/{id}/resolve` | any | 400 unless currently `acknowledged`. Broadcasts `incident_update`. |
 
-Status machine: `open -> acknowledged -> resolved` (acknowledge and
-resolve both guard against repeating an action -- see
-`/docs/evaluation-results.md`, "Backend API: CRUD + Alert/Incident
-Flow").
+Status machine, enforced server-side: `open -> acknowledged -> resolved`.
+Resolving requires acknowledging first, and neither step can be repeated.
+Promote/acknowledge/resolve take a row lock, so two operators acting on
+the same alert or incident at once can't both succeed.
+
+## Dashboard
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/dashboard/summary` | any | Counts for the overview page: `cameras_total`, `cameras_online`, `alerts_total`, `alerts_unreviewed`, `incidents_open`, `people_registered`. |
 
 ## WebSocket
 
 | Path | Auth | Notes |
 |---|---|---|
-| `ws://127.0.0.1:8000/ws/alerts?token=<jwt>` | JWT in query param | Rejected with `403` at handshake on an invalid/missing token. Broadcasts 3 message types: `alert`, `camera_status`, `incident_update`. Client doesn't need to send anything after connecting. |
+| `ws://127.0.0.1:8000/ws/alerts?token=<jwt>` | JWT in query param | Rejected with `403` at handshake on an invalid/missing token or a deactivated/deleted user. Broadcasts 3 message types: `alert`, `camera_status`, `incident_update`. Client doesn't need to send anything after connecting. |
 
 ## Health
 

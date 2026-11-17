@@ -9,7 +9,7 @@ real-time dashboard with incident management.
 
 ## Features
 - 🎥 Real-time camera stream processing (OpenCV)
-- 🧑‍🤝‍🧑 Multi-person detection & tracking (YOLO + DeepSORT-style MOT)
+- 🧑‍🤝‍🧑 Multi-person detection & tracking (YOLOv8 + ByteTrack)
 - 🔐 Face detection & authorized recognition (InsightFace/ArcFace embeddings)
 - 🚧 Restricted-area (ROI) and loitering detection
 - 📷 Camera tampering detection (covered/moved/defocused)
@@ -22,6 +22,11 @@ real-time dashboard with incident management.
 - **Frontend:** React, TypeScript
 - **AI/ML:** OpenCV, YOLO (person detection), InsightFace/ArcFace (face recognition), MOT tracking
 - **Auth:** Role-based access control (admin / security operator)
+
+## Getting Started
+See [`docs/setup.md`](docs/setup.md) (fresh clone to running),
+[`docs/architecture.md`](docs/architecture.md), and
+[`docs/api-reference.md`](docs/api-reference.md).
 
 ## Project Status
 Final Year Project (Batch 2026) — Department of Computer Sciences, Iqra University.

@@ -602,3 +602,65 @@ mock-environment, not just the above table): a controlled multi-scenario
 accuracy pass (varying lighting, distance, occlusion) with
 precision/recall/F1 numbers written up, rather than the single-run
 pass/fail checks above.
+
+## Full-codebase audit against CLAUDE.md Section 11 (2026-11-18)
+
+Re-checked every phase from Phase 0 against the coding standards, then
+fixed what didn't hold up. Every fix below was re-verified, not just
+written.
+
+**Bugs and security issues found and fixed**
+
+| Finding | Impact | Fix |
+|---|---|---|
+| `JWT_SECRET` in the dev `.env` was 25 bytes (HS256 needs 32+, RFC 7518) | Weaker token signing | Rotated to a 64-hex secret; API now refuses to start with a short secret |
+| `async def` routes doing blocking SQLAlchemy calls (alerts, incidents, cameras) | One slow query stalls every request and every WebSocket | Routes are now sync `def` (FastAPI threadpool); broadcasts via `BackgroundTasks` |
+| Acknowledge/resolve/promote had check-then-write races | Two operators could both act on one incident/alert | Row locks (`SELECT ... FOR UPDATE`) |
+| `/incidents/{id}/resolve` allowed skipping acknowledgement | Broke the documented `open -> acknowledged -> resolved` flow | Server enforces acknowledge first |
+| A source alert could be promoted onto a different camera's incident | Inconsistent incident data | 400 on camera mismatch |
+| WebSocket accepted tokens of deactivated/deleted users | Revoked users kept receiving live alerts | Handshake checks the user is active |
+| RTSP passwords (`rtsp://user:pass@...`) returned by the cameras API | Camera credentials visible to every operator | Masked in all responses |
+| `GET /alerts`, `/incidents` returned every row ever | Unbounded responses as alerts accumulate | `limit`/`offset` (default 100, max 500); new `/dashboard/summary` for counts |
+| AI scripts' JWT expires after 8h | Unattended detection would silently stop posting alerts | Client re-logs in on 401 |
+| A backend restart/network blip raised inside the detection loop | Detection process crashed | Mid-loop API failures are logged, loop continues |
+| `camera_health.py` not wired to the backend | "Cameras online" on the dashboard never changed | New `POST /cameras/{id}/heartbeat`; script reports status, raises `CAMERA_OFFLINE`/`CAMERA_ONLINE`, retries dead sources |
+| `face_recognition.py` not wired to the backend | Unknown people never produced an alert | `UNKNOWN_FACE` alert with a cooldown |
+| Dashboard: user menu "Edit profile / Account settings / Support" linked to the removed `/profile` route | 404 on click | Removed |
+| Dashboard: expired/invalid token left every page showing raw API errors | No way back to login without clearing storage | Any 401 logs out and returns to sign-in |
+| Dashboard: WebSocket retried an invalid token every 3s forever | Endless 403 loop (seen live in the backend log from an open tab after the secret rotation) | Exponential backoff (1s to 30s) and an HTTP session re-check that logs the user out |
+| Dashboard: each component opened its own WebSocket | Multiple sockets per tab | One shared socket per tab |
+| Dashboard: Overview/notification bell turned API errors into "0"/"No alerts" | Misleading numbers | Explicit error states |
+| Dashboard: People page had no remove action | Phase 4 step 5 asks for add/remove | Admin-only Remove with confirmation |
+| Sign-in: placeholder hinted the `admin` username; login always went to `/` | Minor info leak; lost deep links | Neutral placeholder; returns to the page originally requested |
+| Leftover TailAdmin branding (logos, page titles, sign-in tagline, 404 footer, stock avatar photo) | Template branding in a supervisor demo | UniVerse logo/favicon/titles; initials avatar |
+| 187 unreachable demo source files and 109 unused images | Dead code | Removed (`components/ui/` primitives kept for future pages) |
+| Pydantic v1-style `class Config` in 6 schemas | Deprecation warnings, breaks on Pydantic v3 | `model_config = ConfigDict(...)` |
+
+**New verification tooling**
+- Backend test suite (`backend/tests`, 28 tests, runs against a separate
+  `universe_test` database): auth, RBAC on every admin-only route,
+  validation (422/400/404), the full alert -> incident -> acknowledge ->
+  resolve flow and its guards, heartbeat, credential masking, dashboard
+  summary, WebSocket delivery and rejection. **Result: 28/28 pass.**
+- `ruff` lint + format config (`backend/pyproject.toml`); **clean**.
+- Frontend: `npm run build` clean; `oxlint` + `eslint` 0 errors (one
+  remaining warning is the standard provider-plus-hook export pattern in
+  `auth-context.tsx`).
+- Headless-Chrome E2E script (28 checks) covering branding, sign-in
+  redirects, user menu, single shared WebSocket across navigation, live
+  camera online status from `camera_health.py`, live `CAMERA_OFFLINE`
+  alert, promote/acknowledge/resolve with resolve hidden until
+  acknowledged, operator read-only settings, people add/remove, readable
+  validation errors, session expiry, 404 branding. **Result: 28/28 pass,
+  no unexpected console errors.** Separately confirmed: with an invalid
+  token, a backend restart drops the socket and the tab returns to
+  sign-in on its own.
+- Regression run of all AI scripts after the refactor: person detection,
+  tracking, ROI/loitering and tamper (both reading live settings), face
+  recognition and camera health all run cleanly against the webcam.
+
+**Not verified in this audit (needs a person/physical setup):** an
+`UNKNOWN_FACE` alert end-to-end (no face was in front of the webcam
+during the run) and `CAMERA_ONLINE` after a real unplug/replug. The code
+path for both is the same `post_alert` call already verified for other
+alert types.

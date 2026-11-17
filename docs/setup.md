@@ -20,7 +20,7 @@ createdb universe_dev
 cd backend
 python -m venv venv
 venv/Scripts/activate       # Windows; `source venv/bin/activate` on Linux/macOS
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps + pytest/ruff; use requirements.txt for runtime only
 ```
 
 Copy `.env.example` to `.env` and fill in real values:
@@ -31,8 +31,15 @@ cp .env.example .env
 
 ```
 DATABASE_URL=postgresql+psycopg2://postgres:<your_postgres_password>@localhost:5432/universe_dev
-JWT_SECRET=<any long random string -- used to sign JWTs>
+JWT_SECRET=<at least 32 bytes; generate with: python -c "import secrets; print(secrets.token_hex(32))">
+UNIVERSE_API_USERNAME=operator          # used by the AI scripts' --camera-id mode
+UNIVERSE_API_PASSWORD=<that user's password>
 ```
+
+The API refuses to start if `DATABASE_URL` or `JWT_SECRET` is missing, or
+if `JWT_SECRET` is shorter than 32 bytes (the HS256 minimum). Changing
+`JWT_SECRET` logs everyone out; open dashboards return to the sign-in page
+on their own.
 
 Apply migrations and seed dev data:
 
@@ -90,25 +97,51 @@ From `backend/`, with the venv active and the API running:
 # Webcam, standalone (no backend wiring, prints to console only)
 python -m app.ai.prototypes.roi_loitering --source 0 --headless
 
-# Webcam or RTSP IP camera, wired to the backend (real settings + real alerts)
-python -m app.ai.prototypes.roi_loitering --source 0 --camera-id 1 \
-    --api-username operator --api-password operator123
-
-python -m app.ai.prototypes.tamper_detection --source "rtsp://user:pass@192.168.1.64:554/stream1" \
-    --camera-id 2 --api-username operator --api-password operator123
+# Wired to the backend (real settings + real alerts). Credentials come from
+# UNIVERSE_API_USERNAME/PASSWORD in .env, or --api-username/--api-password.
+python -m app.ai.prototypes.roi_loitering --source 0 --camera-id 1
+python -m app.ai.prototypes.tamper_detection --source "rtsp://user:pass@192.168.1.64:554/stream1" --camera-id 2
+python -m app.ai.prototypes.face_recognition --source 0 --camera-id 1      # UNKNOWN_FACE alerts
+python -m app.ai.prototypes.camera_health --source 0 --camera-id 1         # live online/offline status
 ```
 
-Thresholds (ROI box, loiter seconds, tamper sensitivity) are configured
-per camera from the dashboard's Settings page (`/settings`, admin-only
-to edit) -- they're read from the `camera_settings` table at script
-startup, not hardcoded.
+| Script | With `--camera-id` it... |
+|---|---|
+| `roi_loitering` | reads ROI + loiter threshold from Settings, raises `ROI_ENTRY` / `LOITERING` |
+| `tamper_detection` | reads tamper thresholds from Settings, raises `TAMPER_COVERED` / `TAMPER_MOVED` / `TAMPER_DEFOCUSED` |
+| `face_recognition` | raises `UNKNOWN_FACE` (at most once per `--alert-cooldown`, default 30s) |
+| `camera_health` | reports online/offline via heartbeat (dashboard updates live), raises `CAMERA_OFFLINE` / `CAMERA_ONLINE`, retries a dead source every `--retry-seconds` |
 
-## 5. Running the test suite / Postman checks
+Thresholds are configured per camera from the dashboard's Settings page
+(`/settings`, admin-only to edit) and read when a script starts, so
+restart a camera's scripts after changing them.
 
-No automated test suite exists yet (the project was verified module-by-
-module per CLAUDE.md Section 12 -- see `/docs/evaluation-results.md`
-for exact commands and results for every module). To manually re-verify
-the API: import the running backend's OpenAPI schema
-(`http://127.0.0.1:8000/openapi.json`) into Postman, or see
-`/docs/api-reference.md` for a plain-text endpoint list with example
-`curl` calls.
+The scripts re-login automatically when their 8-hour token expires and
+keep running if the backend is briefly unreachable (the failed alert is
+logged as a warning).
+
+**Webcams vs IP cameras:** on Windows a USB webcam can be opened by only
+one process at a time, so run one script per webcam. RTSP IP cameras
+accept several connections, so detection, tamper, and health scripts can
+all run against the same camera.
+
+## 5. Tests and checks
+
+Backend (from `backend/`, needs PostgreSQL running; tests create and use
+a separate `universe_test` database, never `universe_dev`):
+
+```sh
+python -m pytest              # API, auth/RBAC, review flow, WebSocket
+python -m ruff check app tests
+python -m ruff format --check app tests
+```
+
+Frontend (from `frontend/`):
+
+```sh
+npm run build    # type-check + production build
+npm run lint
+```
+
+To poke the API by hand, import `http://127.0.0.1:8000/openapi.json` into
+Postman, or use the `curl` examples in `/docs/api-reference.md`.

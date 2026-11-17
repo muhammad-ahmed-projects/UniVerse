@@ -391,6 +391,11 @@ all seven behaviors against the webcam, each one individually testable.
     live tamper-state-transition alert through this new path was not
     re-exercised this session (needs the physical tamper retest below).
     Backward-compatible: CLI-only mode (no `--camera-id`) unchanged.
+    Since extended (2026-11-18 audit): `camera_health.py` reports status
+    via `POST /cameras/{id}/heartbeat` (live dashboard status +
+    `CAMERA_OFFLINE`/`CAMERA_ONLINE` alerts, verified in-browser) and
+    `face_recognition.py` raises `UNKNOWN_FACE` alerts (code path run,
+    not yet triggered by a real unknown face).
 - [x] WebSocket real-time alerts (Phase 3, step 4) — see
   `/docs/evaluation-results.md`; `GET /ws/alerts?token=...` (JWT-gated),
   broadcasts on new alert / camera status change / incident ack-resolve.
@@ -451,5 +456,15 @@ all seven behaviors against the webcam, each one individually testable.
   results already covered by `/docs/evaluation-results.md`.
 - [ ] Mock-environment demo + final report/presentation (Phase 7, steps
   2-3) — needs the team's physical camera setup, not yet done
+- [x] Full-codebase audit against Section 11 (2026-11-18) — 22 issues
+  fixed (security: short JWT secret, RTSP passwords in API responses,
+  revoked users on the WebSocket; correctness: event-loop-blocking
+  routes, review-flow races, resolve-before-acknowledge, unbounded
+  lists, dead `/profile` links, WS retry loop on bad tokens; plus dead
+  TailAdmin code/branding). Added a backend pytest suite (28/28 pass,
+  separate `universe_test` DB) and ruff config; 28/28 headless-browser
+  E2E checks pass. Details in `/docs/evaluation-results.md`. Run
+  `python -m pytest` (backend) and `npm run build && npm run lint`
+  (frontend) before marking anything else done.
 
 Update this checklist as each item is completed.
