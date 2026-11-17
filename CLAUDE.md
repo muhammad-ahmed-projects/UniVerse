@@ -435,10 +435,14 @@ all seven behaviors against the webcam, each one individually testable.
   this machine and the backend only listens on IPv4 — fixed by using
   `127.0.0.1` in `backend_client.py` and `frontend/.env(.example)`;
   latency dropped to ~0.005-0.01s. See `/docs/evaluation-results.md`.
-- [ ] Phase 6: Testing & Evaluation (FPS, false-alert rate, accuracy,
-  camera-offline detection time, tamper-alert accuracy under
-  controlled mock-environment conditions) — needs physical team/camera
-  setup, not yet started
+- [ ] Phase 6: Testing & Evaluation — Section 12's table consolidated
+  in `/docs/evaluation-results.md` (9/11 rows PASS, reusing earlier
+  Phase 1/3/5 results). **Not done:** face recognition (1/3 team
+  registered) and clean tamper cover/move/defocus retest — both
+  blocked on physical team presence. Also still missing: a controlled
+  multi-scenario accuracy pass (lighting/distance/occlusion) with real
+  precision/recall/F1 numbers, which needs the team's physical
+  mock-environment setup
 - [ ] Documentation + demo environment setup
 
 Update this checklist as each item is completed.

@@ -568,3 +568,37 @@ testing it themselves this session.
 
 **Verdict:** PASS for concurrency safety. Real bug found and fixed for
 latency.
+
+## Phase 6 — Testing & Evaluation: Section 12 table consolidated (2026-11-17)
+
+CLAUDE.md Section 12's testing table requires every module to be
+verified a specific way before it's "done." Most rows were already
+tested individually in the sections above; this pulls them into one
+place, exactly as Phase 6 step 1 asks for, and is honest about which
+rows are not actually closed yet.
+
+| Module | Required check | Status |
+|---|---|---|
+| Person detection | Recorded clip + live webcam, stable boxes, FPS | **PASS** -- see "Person Detection" above: ~6 FPS (clip), ~4.3 FPS (live webcam), CPU, YOLOv8n |
+| Tracking | IDs stay consistent across frames, count ID switches | **PASS** for single continuously-visible person (0 ID switches). **Not done:** multi-person/occlusion re-acquisition case -- needs the team physically present |
+| Face recognition | 3+ registered + 2+ unknown faces, true/false match rate | **BLOCKED** -- only 1/3 team members registered (Ahmed). Unknown-rejection alone is PASS (4/4). Needs Khawaja + Aiman to register their faces |
+| Loitering detection | Alert fires once past threshold, not spammed | **PASS** -- see "ROI + Loitering" above: fired once at 3.1s on a 3s threshold |
+| Restricted-area (ROI) | Alert fires on entry, no false triggers from nearby movement | **PASS** -- 0 false triggers in the negative-control test |
+| Camera tamper detection | Cover/move/defocus each trigger the right alert type | **PARTIAL** -- `covered` is clean. `moved`/`defocused` were triggered by hand motion near the lens, not a true reposition/optical defocus. **BLOCKED** on a physical camera-reposition retest |
+| Camera health monitoring | Offline detected within a reasonable time after disconnect | **PASS** -- never-opens at t=0.0s, feed-loss ~1.8s after a 1.0s timeout |
+| Backend API endpoints | Postman-style happy path + invalid input, before frontend | **PASS** -- see "Backend API" sections: auth, CRUD, alert/incident flow all tested via curl (200/400/401/403/404 as expected) |
+| WebSocket alerts | Dashboard receives a new alert live, no refresh | **PASS** -- confirmed twice: backend-level WS test, and the real rendered-dashboard case in the Phase 5 full-pipeline test above |
+| Auth / RBAC | Admin vs. operator roles actually restrict access, not just hide UI | **PASS** -- admin-only writes return 403 for operator at the API layer (see "Backend API: Auth / RBAC" above), not just a hidden button |
+| Full integration | camera -> detection -> alert -> dashboard -> acknowledge/resolve, no manual DB edits | **PASS** -- see "Phase 5 -- Full-pipeline integration" above |
+
+**9 of 11 rows: PASS.** 1 row PARTIAL (tamper). 1 row BLOCKED (face
+recognition, only 1/3 registered). Both remaining gaps need physical
+team presence (Khawaja/Aiman registering their faces; the camera itself
+being physically moved for a clean tamper retest) and cannot be closed
+solo.
+
+**Still entirely outstanding for Phase 6** (needs the team's physical
+mock-environment, not just the above table): a controlled multi-scenario
+accuracy pass (varying lighting, distance, occlusion) with
+precision/recall/F1 numbers written up, rather than the single-run
+pass/fail checks above.
