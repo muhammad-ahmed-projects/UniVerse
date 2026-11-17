@@ -368,7 +368,13 @@ all seven behaviors against the webcam, each one individually testable.
   feed-loss/disconnect case detected ~1.8s after a 1.0s configured
   timeout. Power-loss signal not applicable — no supported hardware
   power-status signal in the team's test setup
-- [ ] PostgreSQL schema + backend API (auth, cameras, alerts, incidents)
+- [x] PostgreSQL schema (Phase 2) — `users`, `cameras`, `people`,
+  `face_embeddings`, `alerts`, `incidents` tables created via Alembic
+  migration `e095e085dfbc`; verified via `inspect().get_table_names()`.
+  Seed script (`app/db/seed.py`) adds 2 test users (admin/operator,
+  bcrypt-hashed passwords) + 2 test cameras; re-run verified idempotent
+  (no duplicate rows on a second run)
+- [ ] Backend API (auth, cameras, alerts, incidents)
 - [ ] WebSocket real-time alerts
 - [ ] Frontend dashboard pages wired to backend
 - [ ] Integration testing (FPS, latency, false-alert rate, accuracy)
