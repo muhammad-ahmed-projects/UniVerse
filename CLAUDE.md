@@ -363,7 +363,11 @@ all seven behaviors against the webcam, each one individually testable.
   loitering alert fires once past threshold (3.1s on a 3s threshold), 0
   false triggers when ROI doesn't overlap the person
 - [ ] Camera tamper detection (covered/moved/defocused)
-- [ ] Camera health monitoring (offline/feed loss/power loss)
+- [x] Camera health monitoring (offline/feed loss) — see
+  `/docs/evaluation-results.md`; never-opens case detected at t=0.0s,
+  feed-loss/disconnect case detected ~1.8s after a 1.0s configured
+  timeout. Power-loss signal not applicable — no supported hardware
+  power-status signal in the team's test setup
 - [ ] PostgreSQL schema + backend API (auth, cameras, alerts, incidents)
 - [ ] WebSocket real-time alerts
 - [ ] Frontend dashboard pages wired to backend

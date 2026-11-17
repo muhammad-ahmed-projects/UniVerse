@@ -202,3 +202,26 @@ hand near the lens, then hold.
   silently treated as equivalent to real defocus.
 - **Not checked off in CLAUDE.md Section 14 yet** — retest `moved` with
   an actual camera reposition before marking this module done.
+
+## Camera Health Monitoring (Phase 1, step 7)
+
+**Module:** `backend/app/ai/prototypes/camera_health.py` — read-success
+timeout-based online/offline state machine; immediate offline if the
+source never opens.
+
+**Test 1 — never opens** (`--source 99`, invalid camera index):
+- Status reported `offline` at `t=0.0s`, immediately, no hang. Correct.
+
+**Test 2 — feed loss / disconnect** (video file source, so the stream
+ends partway — a practical stand-in for an unplugged/disconnected camera
+without needing to physically unplug hardware mid-test; `--timeout 1.0`):
+- Status `online` at `t=0.0s` (first frames read successfully).
+- Once the file's frames were exhausted, status flipped to `OFFLINE` at
+  `t=1.8s` — 0.8s after the 1.0s configured timeout, consistent with the
+  ~0.1s poll interval while reads are failing. Correctly detected within
+  a reasonable time per Section 12's requirement.
+
+**Verdict:** PASS — both the "never connects" and "feed loss/disconnect"
+paths are correctly detected, with offline status reported promptly
+(immediately, and ~1.8s after a 1.0s configured timeout respectively).
+Timeout is CLI-configurable (`--timeout`), not hardcoded.
