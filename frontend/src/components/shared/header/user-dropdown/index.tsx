@@ -14,17 +14,10 @@ import { useAuth } from "@/contexts";
 import { useChangeLocale, useLocale, useTranslations } from "@/i18n";
 import { getLanguage, languages } from "@/i18n/languages";
 import type { Locale } from "@/i18n/routing";
-import {
-  ChevronDownIcon,
-  GearIcon,
-  GlobeIcon,
-  InfoCircleIcon,
-  LogOutIcon,
-  UserCircleIcon,
-} from "@/icons";
+import { ChevronDownIcon, GlobeIcon, LogOutIcon } from "@/icons";
 import { cn } from "@/utils";
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 export default function UserDropdown() {
   const t = useTranslations("userDropdown");
@@ -38,25 +31,30 @@ export default function UserDropdown() {
   const handleSignOut = () => {
     setIsOpen(false);
     logout();
-    navigate("/signin");
+    void navigate("/signin");
   };
 
   const currentLang = getLanguage(locale);
   const CurrentFlagIcon = currentLang.FlagIcon;
 
   const handleSelectLanguage = (id: Locale) => {
-    changeLocale(id);
-    navigate(pathname, { replace: true });
+    void changeLocale(id);
+    void navigate(pathname, { replace: true });
   };
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger className="dropdown-toggle flex items-center text-gray-700 dark:text-gray-400">
-        <span className="me-3 h-11 w-11 overflow-hidden rounded-lg">
-          <img src="/images/user/owner.png" alt="User" className="size-11" />
+        <span
+          aria-hidden="true"
+          className="me-3 flex size-11 items-center justify-center rounded-lg bg-brand-50 text-sm font-semibold text-brand-600 uppercase dark:bg-brand-500/15 dark:text-brand-400"
+        >
+          {user?.username.slice(0, 2) ?? ""}
         </span>
 
-        <span className="me-1 block text-sm font-medium">{user?.username ?? "..."}</span>
+        <span className="me-1 block text-sm font-medium">
+          {user?.username ?? "..."}
+        </span>
 
         <ChevronDownIcon
           className={cn(
@@ -77,21 +75,6 @@ export default function UserDropdown() {
         </div>
 
         <DropdownMenuSeparator />
-
-        <DropdownMenuItem render={<Link to="/profile" />}>
-          <UserCircleIcon className="size-6" />
-          {t("editProfile")}
-        </DropdownMenuItem>
-
-        <DropdownMenuItem render={<Link to="/profile" />}>
-          <GearIcon className="size-6" />
-          {t("accountSettings")}
-        </DropdownMenuItem>
-
-        <DropdownMenuItem render={<Link to="/profile" />}>
-          <InfoCircleIcon className="size-6" />
-          {t("support")}
-        </DropdownMenuItem>
 
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>

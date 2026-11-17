@@ -1,6 +1,11 @@
-# AGENTS.md — TailAdmin React
+# AGENTS.md — UniVerse dashboard (built on TailAdmin React)
 
-React 19 admin dashboard template: Vite 8 · TypeScript ~6 · Tailwind CSS v4 · React Router 8 · Base UI · react-i18next. Client-only SPA with no backend, auth, or global store.
+React 19 SPA: Vite 8 · TypeScript ~6 · Tailwind CSS v4 · React Router 8 · Base UI · react-i18next. Talks to the FastAPI backend in `../backend` (JWT auth, REST + one shared `/ws/alerts` WebSocket). See the root `CLAUDE.md` for project rules.
+
+- API calls live only in `src/services/` (never inline `fetch` in components); `api-client.ts` handles auth headers, error formatting, and session expiry (401 → `UNAUTHORIZED_EVENT` → logout).
+- Live updates: `src/hooks/use-alerts-socket.ts` (one socket per tab, shared by all subscribers).
+- Auth state: `src/contexts/auth-context.tsx`; routes guarded by `src/components/auth/protected-route.tsx`.
+- Project pages: `src/pages/main/surveillance/`. TailAdmin's demo pages were removed; `src/components/ui/` primitives are kept for reuse.
 
 ## Commands
 
@@ -12,7 +17,7 @@ React 19 admin dashboard template: Vite 8 · TypeScript ~6 · Tailwind CSS v4 ·
 | `npm run lint:fix` | Oxlint fixes, then ESLint fixes        |
 | `npm run format`   | Prettier across the repo               |
 
-There is no test suite. **Run `npm run build` and `npm run lint` after every change.**
+No frontend unit tests; backend tests live in `../backend/tests`. **Run `npm run build` and `npm run lint` after every change.**
 
 ## Where Things Live
 
@@ -45,9 +50,9 @@ Path alias: `@/*` → `src/*`.
 
 - `src/App.tsx` is the **only** source of routes. Folder structure does not generate URLs, and `pages/main`, `pages/others`, `pages/support` are organizational categories, **not** layout boundaries. Read `App.tsx` to see which layout wraps a page.
 - Layout groups in `App.tsx`:
-  - **`AppLayout`** (pathless): nearly all pages, including charts, maps, UI elements, and support. Nested layouts under it: `/ai-chat/*`, `/ai-settings/*` (index routes redirect to `text` / `account`), and the email `inbox-layout.tsx` (`/inbox`, `/inbox-details`). `AppLayout` applies full-height handling for `/ai-chat` and `/ai-settings`.
-  - **`AuthLayout`** (`pages/others/auth/layout.tsx`): `/signin`, `/signup`, `/reset-password`, `/two-step-verification`. Demo forms only; no guards or sessions.
-  - **No layout**: error/status pages (`/error-404`, `/error-500`, `/error-503`, `/coming-soon`, `/maintenance`, `/success`), `/layout-one`…`/layout-six` (own `SidebarProvider`), and the `/*` 404 fallback.
+  - **`ProtectedRoute` → `AppLayout`**: `/` (overview), `/cameras`, `/surveillance-alerts`, `/incidents`, `/people`, `/settings`. Unauthenticated users are redirected to `/signin` and returned to the requested page after login.
+  - **`AuthLayout`** (`pages/others/auth/layout.tsx`): `/signin` only (no self-registration; admins create accounts via the API).
+  - **No layout**: the `/*` 404 fallback.
 - No dynamic params, locale-prefixed URLs, loaders, or actions. Import `Link`/hooks from `react-router`, never `react-router-dom`.
 
 ### Adding a page
@@ -66,10 +71,8 @@ Path alias: `@/*` → `src/*`.
 - Dialogs: controlled `open`/`onOpenChange` with `@/components/ui/dialog`. There is no `Modal` or `useModal`.
 - Theme: `useTheme` from `@/contexts` (`light` | `dark` | `auto`). Sidebar: `useSidebar` from `@/components/ui/sidebar`.
 - Forms: React Hook Form + Zod resolver + colocated schema + `Field`/`FieldLabel`/`FieldError` from `@/components/ui/field`.
-- Tables: TanStack Table **v9**. Copy patterns from `pages/main/tables/{basic-tables,data-tables}`, not from older-version docs.
-- UI demo sections use `ComponentCard`.
-- Tasks: local React state + React DnD (`HTML5Backend`); shared task UI in `pages/main/task/`, list/kanban specifics in their subfolders.
-- ApexCharts/FullCalendar are used directly; no SSR guards or lazy wrappers.
+- Tables: the `@/components/ui/table` primitives, as used in `pages/main/surveillance/*`.
+- Page sections use `ComponentCard`; every data view handles loading, empty, and error states explicitly.
 
 ## i18n
 

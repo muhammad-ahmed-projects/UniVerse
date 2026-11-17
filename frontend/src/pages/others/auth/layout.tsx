@@ -17,11 +17,12 @@ export default function AuthLayout() {
                   width={231}
                   height={48}
                   src="/images/logo/auth-logo.svg"
-                  alt="Logo"
+                  alt="UniVerse"
                 />
               </Link>
               <p className="text-center text-gray-400 dark:text-white/60">
-                Free and Open-Source Tailwind CSS Admin Dashboard Template
+                AI-powered smart surveillance: detection, tracking, and
+                real-time incident response
               </p>
             </div>
           </div>
