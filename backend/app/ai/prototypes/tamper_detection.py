@@ -5,8 +5,13 @@ variance), and frame-to-frame difference against a rolling baseline
 captured while the camera is in its normal state. An alert fires once
 per state transition, not every frame.
 
-Standalone script, not yet wired into the FastAPI backend. Run directly:
+Runs standalone with CLI flags by default:
     python -m app.ai.prototypes.tamper_detection --source 0
+
+Or wired to the backend (reads thresholds from camera_settings, writes
+real alerts via POST /alerts instead of only printing):
+    python -m app.ai.prototypes.tamper_detection --source 0 --camera-id 1 \
+        --api-username operator --api-password operator123
 """
 import argparse
 import time
@@ -14,6 +19,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+from app.ai.prototypes.backend_client import add_backend_args, build_client
 
 
 def compute_metrics(gray: np.ndarray) -> tuple[float, float]:
@@ -42,6 +49,17 @@ def classify_state(
 
 
 def run(args: argparse.Namespace) -> None:
+    client = build_client(args)
+    if client is not None:
+        settings = client.get_camera_settings(args.camera_id)
+        args.motion_threshold = settings["tamper_motion_threshold"]
+        args.covered_brightness_ratio = settings["tamper_covered_brightness_ratio"]
+        args.covered_sharpness_ratio = settings["tamper_covered_sharpness_ratio"]
+        args.defocus_sharpness_ratio = settings["tamper_defocus_sharpness_ratio"]
+        print(f"Loaded tamper thresholds from backend for camera {args.camera_id}: "
+              f"motion={args.motion_threshold} covered_brightness={args.covered_brightness_ratio} "
+              f"covered_sharpness={args.covered_sharpness_ratio} defocus_sharpness={args.defocus_sharpness_ratio}")
+
     cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
     if not cap.isOpened():
         raise RuntimeError(f"Could not open source: {args.source}")
@@ -76,6 +94,12 @@ def run(args: argparse.Namespace) -> None:
         if new_state != current_state:
             events.append((frame_idx, current_state, new_state))
             print(f"[frame {frame_idx}] TAMPER STATE CHANGE: {current_state} -> {new_state}")
+            if client is not None and new_state != "normal":
+                client.post_alert(
+                    args.camera_id, f"TAMPER_{new_state.upper()}", "high",
+                    f"Camera tamper detected: {current_state} -> {new_state}",
+                    extra_data={"frame": frame_idx, "from_state": current_state, "to_state": new_state},
+                )
             current_state = new_state
 
         if current_state == "normal":
@@ -123,6 +147,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
     parser.add_argument("--frame-sample-every", type=int, default=10, help="Save every Nth frame when --save-frames is set")
+    add_backend_args(parser)
     return parser.parse_args()
 
 

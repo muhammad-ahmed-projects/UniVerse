@@ -422,3 +422,57 @@ a supervisor demo):
 **Verdict:** PASS. Phase 4 is now fully done (all 6 steps), and the
 dashboard only contains pages that map to an actual project requirement
 or a already-built feature.
+
+## Phase 3 step 3 — Wire Phase 1 AI scripts into backend (2026-11-17)
+
+**What changed:** `roi_loitering.py` and `tamper_detection.py` previously
+only read thresholds from CLI flags and printed alerts to console. Added
+`backend/app/ai/prototypes/backend_client.py` (a thin `requests`-based
+client: login once, `GET /cameras/{id}/settings`, `POST /alerts`) and an
+optional `--camera-id` flag on both scripts. When `--camera-id` is given
+(plus `--api-username`/`--api-password` or the `UNIVERSE_API_USERNAME`/
+`UNIVERSE_API_PASSWORD` env vars), each script fetches its ROI/loiter/
+tamper thresholds from the real `camera_settings` table at startup
+instead of CLI defaults, and POSTs a real alert to `/alerts` (through the
+same validated endpoint the dashboard uses, so the existing camera_id/
+priority checks and the WebSocket broadcast all fire normally) in
+addition to the existing console print. Without `--camera-id`, both
+scripts behave exactly as before (CLI-only, console-only) -- this was
+checked explicitly so the existing Phase 1 standalone test results above
+stay valid.
+
+**How tested:**
+1. Direct `backend_client.py` test: logged in as `operator`, fetched
+   camera 1's settings (returned the real saved values from the Settings
+   page test: `roi=0.2,0.1,0.9,0.9`, `loiter_seconds=8.0`, `tamper_motion_
+   threshold=30.0`, etc. -- confirming it reads live DB state, not
+   defaults), then POSTed a test alert (`TEST_INTEGRATION`, id 3) and
+   confirmed it via a separate `GET /alerts?camera_id=1` call (persisted,
+   not just an echoed response).
+2. `roi_loitering.py --source 0 --camera-id 1 --headless --max-frames 20`:
+   printed `Loaded settings from backend for camera 1: roi=0.2,0.1,0.9,0.9
+   loiter_seconds=8.0` (matches step 1's values), fired a real `ROI_ENTRY`
+   alert on frame 0, confirmed as alert id 4 in the DB afterward with the
+   correct `camera_id`, `alert_type`, `priority`, and `message`.
+3. `tamper_detection.py --source 0 --camera-id 1 --headless --max-frames
+   15`: printed `Loaded tamper thresholds from backend for camera 1:
+   motion=30.0 covered_brightness=0.4 covered_sharpness=0.3 defocus_
+   sharpness=0.35` (matches saved settings), ran cleanly with 0 state
+   changes (camera was in its normal resting state, as expected --
+   confirms the settings-load and run path don't crash, but did not
+   itself re-exercise a tamper state transition through this new code
+   path; the POST-alert mechanism itself is already proven generically by
+   steps 1-2 since both scripts call the identical `client.post_alert`
+   method).
+4. Backward-compat check: `roi_loitering.py --source 0 --headless
+   --max-frames 10` (no `--camera-id`) printed no "Loaded settings" line
+   and made no backend calls -- confirms standalone CLI-only mode, used
+   for all of Phase 1's original evaluation above, is unchanged.
+
+**Verdict:** PASS for the wiring itself (settings read from DB, alerts
+written to DB via the real API, backward compatibility preserved).
+**Not yet exercised:** a live tamper state transition (cover/move/
+defocus) through the new `--camera-id` path specifically -- only the
+settings-load and no-crash path was confirmed for `tamper_detection.py`
+in this session. Should be re-confirmed the next time the team does a
+physical tamper retest (see the still-open Phase 1 step 6 item below).

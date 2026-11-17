@@ -380,8 +380,17 @@ all seven behaviors against the webcam, each one individually testable.
   - Alerts + incidents: create/list/filter, and the full human-review
     chain (alert -> incident -> acknowledge -> resolve) verified via
     curl, including double-action guards (can't ack/resolve twice).
-  - **Not yet done:** wiring Phase 1 AI scripts into these services to
-    write real alerts automatically (still manual/API-only right now).
+  - [x] AI script wiring (Phase 3, step 3) — `roi_loitering.py` and
+    `tamper_detection.py` now have an optional `--camera-id` flag
+    (`backend/app/ai/prototypes/backend_client.py`): reads ROI/loiter/
+    tamper thresholds from the real `camera_settings` table and writes
+    real alerts via `POST /alerts` instead of only printing. Verified:
+    settings fetch matches live DB values, a real `ROI_ENTRY` alert
+    fired by `roi_loitering.py` landed in the DB (id 4) with correct
+    fields; `tamper_detection.py`'s settings-load path verified but a
+    live tamper-state-transition alert through this new path was not
+    re-exercised this session (needs the physical tamper retest below).
+    Backward-compatible: CLI-only mode (no `--camera-id`) unchanged.
 - [x] WebSocket real-time alerts (Phase 3, step 4) — see
   `/docs/evaluation-results.md`; `GET /ws/alerts?token=...` (JWT-gated),
   broadcasts on new alert / camera status change / incident ack-resolve.

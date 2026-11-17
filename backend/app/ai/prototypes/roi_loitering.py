@@ -4,8 +4,13 @@ Builds on the tracking prototype -- each tracked person's box center is
 checked against a configured zone. Alerts fire once per transition
 (entry / loitering-threshold-crossed), not every frame.
 
-Standalone script, not yet wired into the FastAPI backend. Run directly:
+Runs standalone with CLI flags by default:
     python -m app.ai.prototypes.roi_loitering --source 0 --roi 0.3,0.2,0.9,1.0
+
+Or wired to the backend (reads roi/loiter_seconds from camera_settings,
+writes real alerts via POST /alerts instead of only printing):
+    python -m app.ai.prototypes.roi_loitering --source 0 --camera-id 1 \
+        --api-username operator --api-password operator123
 """
 import argparse
 import time
@@ -13,6 +18,7 @@ from pathlib import Path
 
 import cv2
 
+from app.ai.prototypes.backend_client import add_backend_args, build_client
 from app.ai.prototypes.person_detection import PERSON_CLASS_ID, load_model, open_source
 
 Roi = tuple[int, int, int, int]
@@ -35,11 +41,20 @@ def point_in_roi(point: tuple[int, int], roi: Roi) -> bool:
 
 
 def run(args: argparse.Namespace) -> None:
+    client = build_client(args)
+    loiter_seconds = args.loiter_seconds
+    roi_str = args.roi
+    if client is not None:
+        settings = client.get_camera_settings(args.camera_id)
+        roi_str = f"{settings['roi_x1']},{settings['roi_y1']},{settings['roi_x2']},{settings['roi_y2']}"
+        loiter_seconds = settings["loiter_seconds"]
+        print(f"Loaded settings from backend for camera {args.camera_id}: roi={roi_str} loiter_seconds={loiter_seconds}")
+
     model = load_model(args.model)
     cap = open_source(args.source)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    roi = parse_roi(args.roi, width, height)
+    roi = parse_roi(roi_str, width, height)
 
     track_state: dict[int, dict] = {}
     alerts: list[tuple[int, str, int]] = []
@@ -84,6 +99,12 @@ def run(args: argparse.Namespace) -> None:
                 if inside and not state["inside"]:
                     alerts.append((frame_idx, "ROI_ENTRY", tid))
                     print(f"[frame {frame_idx}] ALERT: ID {tid} entered restricted area")
+                    if client is not None:
+                        client.post_alert(
+                            args.camera_id, "ROI_ENTRY", "medium",
+                            f"Person (track {tid}) entered restricted area",
+                            extra_data={"track_id": tid, "frame": frame_idx},
+                        )
                     state["entered_at"] = now
                     state["loiter_alerted"] = False
                 elif not inside and state["inside"]:
@@ -92,9 +113,15 @@ def run(args: argparse.Namespace) -> None:
 
                 if inside and state["entered_at"] is not None:
                     duration = now - state["entered_at"]
-                    if duration >= args.loiter_seconds and not state["loiter_alerted"]:
+                    if duration >= loiter_seconds and not state["loiter_alerted"]:
                         alerts.append((frame_idx, "LOITERING", tid))
                         print(f"[frame {frame_idx}] ALERT: ID {tid} loitering for {duration:.1f}s")
+                        if client is not None:
+                            client.post_alert(
+                                args.camera_id, "LOITERING", "high",
+                                f"Person (track {tid}) loitering for {duration:.1f}s",
+                                extra_data={"track_id": tid, "frame": frame_idx, "duration_seconds": duration},
+                            )
                         state["loiter_alerted"] = True
 
                 state["inside"] = inside
@@ -134,6 +161,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
     parser.add_argument("--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set")
+    add_backend_args(parser)
     return parser.parse_args()
 
 
