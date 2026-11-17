@@ -251,3 +251,48 @@ correct status codes; RBAC actually restricts the `/auth/register`
 endpoint by role, not just by hiding a UI button, per Section 12's
 explicit requirement ("Confirm admin vs. security-operator roles
 actually restrict access, not just hide UI elements").
+
+## Backend API: CRUD + Alert/Incident Flow (Phase 3, step 2)
+
+**Modules:** `app/api/cameras.py`, `app/api/people.py`, `app/api/alerts.py`,
+`app/api/incidents.py`.
+
+**Cameras** (curl, port 8010):
+- List (operator token): 200, returns seeded cameras.
+- List with no auth token: 401.
+- Create as `security_operator`: 403 (admin-only, RBAC enforced).
+- Create as `admin`: 201.
+- Create with empty `name`: 422 (Pydantic `min_length=1`).
+- Get nonexistent camera id: 404.
+
+**People:**
+- Create as `security_operator`: 403.
+- Create as `admin`: 201.
+- List: 200, returns the created record.
+- Create with empty `name`: 422.
+
+**Alerts + Incidents (full review flow):**
+- Create alert with a nonexistent `camera_id`: 400 (checked against the
+  DB before insert, not a raw FK constraint error).
+- Create alert with an invalid `priority` ("urgent"): 400.
+- Create alert happy path (`loitering`, camera 1): 201.
+- List alerts filtered by `camera_id`: 200, returns only that camera's
+  alerts.
+- Create incident from that alert (`source_alert_id`): 201, alert's
+  `incident_id` is set — confirms the human-review-promotes-alert flow
+  from Section 11's privacy requirement.
+- Create a second incident pointing at the same, already-linked alert:
+  400 ("already linked to an incident").
+- `PATCH /incidents/{id}/acknowledge`: 200, `status` -> `acknowledged`,
+  `acknowledged_by`/`acknowledged_at` set to the current admin user.
+- Acknowledge again (already acknowledged): 400.
+- `PATCH /incidents/{id}/resolve`: 200, `status` -> `resolved`,
+  `resolved_by`/`resolved_at` set.
+- Resolve again (already resolved): 400.
+- List incidents filtered `status=resolved`: 200, returns the resolved
+  incident.
+
+**Verdict:** PASS — all CRUD endpoints enforce RBAC correctly (admin-only
+writes on cameras/people), reject invalid input with 400/422 rather than
+raw DB errors, and the alert -> incident -> acknowledge -> resolve chain
+works end-to-end with correct state transitions and double-action guards.

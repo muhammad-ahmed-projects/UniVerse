@@ -374,13 +374,14 @@ all seven behaviors against the webcam, each one individually testable.
   Seed script (`app/db/seed.py`) adds 2 test users (admin/operator,
   bcrypt-hashed passwords) + 2 test cameras; re-run verified idempotent
   (no duplicate rows on a second run)
-- [ ] Backend API — IN PROGRESS:
-  - [x] Auth/RBAC (Phase 3, step 1) — JWT login, bcrypt hashing,
-    admin-only registration, role-based access control. See
-    `/docs/evaluation-results.md`; tested happy path + invalid input +
-    RBAC enforcement (operator blocked 403, admin allowed 201) via curl.
-  - [ ] CRUD endpoints: cameras, registered people, alerts, incidents
-  - [ ] Wire Phase 1 AI scripts into backend services
+- [x] Backend API (Phase 3, steps 1-2) — see `/docs/evaluation-results.md`:
+  - Auth/RBAC: JWT login, bcrypt hashing, admin-only registration.
+  - CRUD: cameras, people (both admin-only writes, RBAC-enforced).
+  - Alerts + incidents: create/list/filter, and the full human-review
+    chain (alert -> incident -> acknowledge -> resolve) verified via
+    curl, including double-action guards (can't ack/resolve twice).
+  - **Not yet done:** wiring Phase 1 AI scripts into these services to
+    write real alerts automatically (still manual/API-only right now).
 - [ ] WebSocket real-time alerts
 - [ ] Frontend dashboard pages wired to backend
 - [ ] Integration testing (FPS, latency, false-alert rate, accuracy)
