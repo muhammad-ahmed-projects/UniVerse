@@ -3,6 +3,7 @@
 Standalone script, not yet wired into the FastAPI backend. Run directly:
     python -m app.ai.prototypes.tracking --source 0
 """
+
 import argparse
 import time
 from pathlib import Path
@@ -12,8 +13,14 @@ import cv2
 from app.ai.prototypes.person_detection import PERSON_CLASS_ID, load_model, open_source
 
 ID_COLOR_PALETTE = [
-    (0, 255, 0), (255, 128, 0), (0, 128, 255), (255, 0, 255),
-    (0, 255, 255), (128, 0, 255), (255, 255, 0), (0, 128, 0),
+    (0, 255, 0),
+    (255, 128, 0),
+    (0, 128, 255),
+    (255, 0, 255),
+    (0, 255, 255),
+    (128, 0, 255),
+    (255, 255, 0),
+    (0, 128, 0),
 ]
 
 
@@ -26,7 +33,7 @@ def draw_tracks(frame, result, conf_threshold: float, seen_ids: set[int]) -> int
     boxes = result.boxes
     if boxes is None or boxes.id is None:
         return 0
-    for box, track_id in zip(boxes, boxes.id):
+    for box, track_id in zip(boxes, boxes.id, strict=True):
         cls_id = int(box.cls[0])
         conf = float(box.conf[0])
         if cls_id != PERSON_CLASS_ID or conf < conf_threshold:
@@ -37,8 +44,13 @@ def draw_tracks(frame, result, conf_threshold: float, seen_ids: set[int]) -> int
         color = color_for_id(tid)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         cv2.putText(
-            frame, f"ID {tid} ({conf:.2f})", (x1, max(y1 - 8, 0)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2,
+            frame,
+            f"ID {tid} ({conf:.2f})",
+            (x1, max(y1 - 8, 0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            2,
         )
         count += 1
     return count
@@ -72,8 +84,12 @@ def run(args: argparse.Namespace) -> None:
 
         t0 = time.time()
         result = model.track(
-            frame, persist=True, tracker=args.tracker, classes=[PERSON_CLASS_ID],
-            conf=args.conf, verbose=False,
+            frame,
+            persist=True,
+            tracker=args.tracker,
+            classes=[PERSON_CLASS_ID],
+            conf=args.conf,
+            verbose=False,
         )[0]
         person_count = draw_tracks(frame, result, args.conf, seen_ids)
         dt = max(time.time() - t0, 1e-6)
@@ -81,8 +97,13 @@ def run(args: argparse.Namespace) -> None:
         fps_smoothed = instant_fps if fps_smoothed == 0 else 0.9 * fps_smoothed + 0.1 * instant_fps
 
         cv2.putText(
-            frame, f"FPS: {fps_smoothed:.1f}  people: {person_count}  total IDs: {len(seen_ids)}",
-            (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2,
+            frame,
+            f"FPS: {fps_smoothed:.1f}  people: {person_count}  total IDs: {len(seen_ids)}",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 255),
+            2,
         )
 
         if writer:
@@ -114,13 +135,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="UniVerse Phase 1: person tracking prototype (ByteTrack)")
     parser.add_argument("--source", default="0", help="Webcam index or video file path")
     parser.add_argument("--model", default="yolov8n.pt", help="YOLO weights file")
-    parser.add_argument("--tracker", default="bytetrack.yaml", help="Ultralytics tracker config (bytetrack.yaml or botsort.yaml)")
+    parser.add_argument(
+        "--tracker", default="bytetrack.yaml", help="Ultralytics tracker config (bytetrack.yaml or botsort.yaml)"
+    )
     parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold for person detections")
     parser.add_argument("--headless", action="store_true", help="Run without a display window (for automated testing)")
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-video", default="", help="Path to save the annotated output video")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
-    parser.add_argument("--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set")
+    parser.add_argument(
+        "--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set"
+    )
     return parser.parse_args()
 
 

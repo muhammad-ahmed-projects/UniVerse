@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CameraSettingsUpdate(BaseModel):
@@ -20,7 +20,6 @@ class CameraSettingsUpdate(BaseModel):
 
 
 class CameraSettingsOut(CameraSettingsUpdate):
-    camera_id: int
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    camera_id: int

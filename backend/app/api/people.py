@@ -24,7 +24,9 @@ def get_person(person_id: int, db: Session = Depends(get_db)) -> Person:
 
 
 @router.post(
-    "", response_model=PersonOut, status_code=status.HTTP_201_CREATED,
+    "",
+    response_model=PersonOut,
+    status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def create_person(payload: PersonCreate, db: Session = Depends(get_db)) -> Person:
@@ -39,7 +41,8 @@ def create_person(payload: PersonCreate, db: Session = Depends(get_db)) -> Perso
 
 
 @router.delete(
-    "/{person_id}", status_code=status.HTTP_204_NO_CONTENT,
+    "/{person_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def delete_person(person_id: int, db: Session = Depends(get_db)) -> None:

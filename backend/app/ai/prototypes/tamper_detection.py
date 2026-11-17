@@ -13,6 +13,7 @@ real alerts via POST /alerts instead of only printing):
     python -m app.ai.prototypes.tamper_detection --source 0 --camera-id 1 \
         --api-username operator --api-password operator123
 """
+
 import argparse
 import time
 from pathlib import Path
@@ -30,8 +31,12 @@ def compute_metrics(gray: np.ndarray) -> tuple[float, float]:
 
 
 def classify_state(
-    brightness: float, sharpness: float, frame_diff: float,
-    baseline_brightness: float, baseline_sharpness: float, args: argparse.Namespace,
+    brightness: float,
+    sharpness: float,
+    frame_diff: float,
+    baseline_brightness: float,
+    baseline_sharpness: float,
+    args: argparse.Namespace,
 ) -> str:
     if frame_diff > args.motion_threshold:
         return "moved"
@@ -56,9 +61,11 @@ def run(args: argparse.Namespace) -> None:
         args.covered_brightness_ratio = settings["tamper_covered_brightness_ratio"]
         args.covered_sharpness_ratio = settings["tamper_covered_sharpness_ratio"]
         args.defocus_sharpness_ratio = settings["tamper_defocus_sharpness_ratio"]
-        print(f"Loaded tamper thresholds from backend for camera {args.camera_id}: "
-              f"motion={args.motion_threshold} covered_brightness={args.covered_brightness_ratio} "
-              f"covered_sharpness={args.covered_sharpness_ratio} defocus_sharpness={args.defocus_sharpness_ratio}")
+        print(
+            f"Loaded tamper thresholds from backend for camera {args.camera_id}: "
+            f"motion={args.motion_threshold} covered_brightness={args.covered_brightness_ratio} "
+            f"covered_sharpness={args.covered_sharpness_ratio} defocus_sharpness={args.defocus_sharpness_ratio}"
+        )
 
     cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
     if not cap.isOpened():
@@ -96,7 +103,9 @@ def run(args: argparse.Namespace) -> None:
             print(f"[frame {frame_idx}] TAMPER STATE CHANGE: {current_state} -> {new_state}")
             if client is not None and new_state != "normal":
                 client.post_alert(
-                    args.camera_id, f"TAMPER_{new_state.upper()}", "high",
+                    args.camera_id,
+                    f"TAMPER_{new_state.upper()}",
+                    "high",
                     f"Camera tamper detected: {current_state} -> {new_state}",
                     extra_data={"frame": frame_idx, "from_state": current_state, "to_state": new_state},
                 )
@@ -106,10 +115,16 @@ def run(args: argparse.Namespace) -> None:
             baseline_brightness = 0.95 * baseline_brightness + 0.05 * brightness
             baseline_sharpness = 0.95 * baseline_sharpness + 0.05 * sharpness
 
-        cv2.putText(frame, f"state: {current_state}", (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, f"brightness: {brightness:.1f}  sharpness: {sharpness:.1f}  diff: {frame_diff:.1f}",
-                    (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        cv2.putText(frame, f"state: {current_state}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(
+            frame,
+            f"brightness: {brightness:.1f}  sharpness: {sharpness:.1f}  diff: {frame_diff:.1f}",
+            (10, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 255),
+            1,
+        )
 
         if out_dir and frame_idx % args.frame_sample_every == 0:
             cv2.imwrite(str(out_dir / f"frame_{frame_idx:04d}.png"), frame)
@@ -138,15 +153,39 @@ def run(args: argparse.Namespace) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="UniVerse Phase 1: camera tamper detection prototype")
     parser.add_argument("--source", default="0", help="Webcam index or video file path")
-    parser.add_argument("--motion-threshold", type=float, default=25.0, help="Mean abs frame-diff above this = camera moved")
-    parser.add_argument("--covered-brightness-ratio", type=float, default=0.4, help="Brightness below baseline*ratio counts toward 'covered'")
-    parser.add_argument("--covered-sharpness-ratio", type=float, default=0.3, help="Sharpness below baseline*ratio counts toward 'covered'")
-    parser.add_argument("--defocus-sharpness-ratio", type=float, default=0.35, help="Sharpness below baseline*ratio (brightness unchanged) counts as 'defocused'")
-    parser.add_argument("--brightness-tolerance", type=float, default=15.0, help="Max brightness delta from baseline still considered 'defocused' rather than 'covered'")
+    parser.add_argument(
+        "--motion-threshold", type=float, default=25.0, help="Mean abs frame-diff above this = camera moved"
+    )
+    parser.add_argument(
+        "--covered-brightness-ratio",
+        type=float,
+        default=0.4,
+        help="Brightness below baseline*ratio counts toward 'covered'",
+    )
+    parser.add_argument(
+        "--covered-sharpness-ratio",
+        type=float,
+        default=0.3,
+        help="Sharpness below baseline*ratio counts toward 'covered'",
+    )
+    parser.add_argument(
+        "--defocus-sharpness-ratio",
+        type=float,
+        default=0.35,
+        help="Sharpness below baseline*ratio (brightness unchanged) counts as 'defocused'",
+    )
+    parser.add_argument(
+        "--brightness-tolerance",
+        type=float,
+        default=15.0,
+        help="Max brightness delta from baseline still considered 'defocused' rather than 'covered'",
+    )
     parser.add_argument("--headless", action="store_true", help="Run without a display window (for automated testing)")
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
-    parser.add_argument("--frame-sample-every", type=int, default=10, help="Save every Nth frame when --save-frames is set")
+    parser.add_argument(
+        "--frame-sample-every", type=int, default=10, help="Save every Nth frame when --save-frames is set"
+    )
     add_backend_args(parser)
     return parser.parse_args()
 

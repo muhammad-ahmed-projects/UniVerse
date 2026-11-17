@@ -1,17 +1,24 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.alert import Priority
+
+IncidentStatus = Literal["open", "acknowledged", "resolved"]
 
 
 class IncidentCreate(BaseModel):
-    camera_id: int
+    camera_id: int = Field(gt=0)
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=1000)
-    priority: str = Field(default="medium", max_length=20)
-    source_alert_id: int | None = None
+    priority: Priority = "medium"
+    source_alert_id: int | None = Field(default=None, gt=0)
 
 
 class IncidentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     camera_id: int
     title: str
@@ -24,6 +31,3 @@ class IncidentOut(BaseModel):
     resolved_at: datetime | None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True

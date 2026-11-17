@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError
@@ -22,7 +24,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if username is None:
             raise credentials_error
     except PyJWTError:
-        raise credentials_error
+        raise credentials_error from None
 
     user = db.query(User).filter(User.username == username).first()
     if user is None or not user.is_active:
@@ -30,7 +32,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
-def require_role(*allowed_roles: UserRole):
+def require_role(*allowed_roles: UserRole) -> Callable[..., User]:
     def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role not in allowed_roles:
             raise HTTPException(
@@ -38,4 +40,5 @@ def require_role(*allowed_roles: UserRole):
                 detail="You do not have permission to perform this action",
             )
         return user
+
     return dependency

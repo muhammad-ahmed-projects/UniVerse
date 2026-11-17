@@ -15,9 +15,7 @@ class CameraSettings(Base):
     __tablename__ = "camera_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    camera_id: Mapped[int] = mapped_column(
-        ForeignKey("cameras.id", ondelete="CASCADE"), unique=True, nullable=False
-    )
+    camera_id: Mapped[int] = mapped_column(ForeignKey("cameras.id", ondelete="CASCADE"), unique=True, nullable=False)
 
     # ROI rectangle, as fractions of frame size (0.0-1.0) -- matches
     # app/ai/prototypes/roi_loitering.py's --roi format.

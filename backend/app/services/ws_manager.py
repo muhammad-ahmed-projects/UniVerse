@@ -5,6 +5,7 @@ Single-process only (no Redis/pub-sub) -- fine for the team's
 single-instance mock-environment deployment; would need a shared
 broker if this ever runs behind multiple backend workers.
 """
+
 from fastapi import WebSocket
 
 
@@ -22,7 +23,8 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict) -> None:
         dead: list[WebSocket] = []
-        for connection in self.active_connections:
+        # Iterate a snapshot: clients can connect/disconnect while we await each send.
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
             except Exception:

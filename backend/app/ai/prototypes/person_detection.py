@@ -3,6 +3,7 @@
 Standalone script, not yet wired into the FastAPI backend. Run directly:
     python -m app.ai.prototypes.person_detection --source 0
 """
+
 import argparse
 import time
 from pathlib import Path
@@ -35,8 +36,13 @@ def draw_person_detections(frame, result, conf_threshold: float) -> int:
         x1, y1, x2, y2 = map(int, box.xyxy[0])
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(
-            frame, f"person {conf:.2f}", (x1, max(y1 - 8, 0)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
+            frame,
+            f"person {conf:.2f}",
+            (x1, max(y1 - 8, 0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1,
         )
         count += 1
     return count
@@ -75,8 +81,13 @@ def run(args: argparse.Namespace) -> None:
         fps_smoothed = instant_fps if fps_smoothed == 0 else 0.9 * fps_smoothed + 0.1 * instant_fps
 
         cv2.putText(
-            frame, f"FPS: {fps_smoothed:.1f}  people: {person_count}", (10, 25),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2,
+            frame,
+            f"FPS: {fps_smoothed:.1f}  people: {person_count}",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 0, 255),
+            2,
         )
 
         if writer:
@@ -112,7 +123,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-video", default="", help="Path to save the annotated output video")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
-    parser.add_argument("--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set")
+    parser.add_argument(
+        "--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set"
+    )
     return parser.parse_args()
 
 

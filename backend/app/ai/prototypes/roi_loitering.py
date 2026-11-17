@@ -12,6 +12,7 @@ writes real alerts via POST /alerts instead of only printing):
     python -m app.ai.prototypes.roi_loitering --source 0 --camera-id 1 \
         --api-username operator --api-password operator123
 """
+
 import argparse
 import time
 from pathlib import Path
@@ -48,7 +49,9 @@ def run(args: argparse.Namespace) -> None:
         settings = client.get_camera_settings(args.camera_id)
         roi_str = f"{settings['roi_x1']},{settings['roi_y1']},{settings['roi_x2']},{settings['roi_y2']}"
         loiter_seconds = settings["loiter_seconds"]
-        print(f"Loaded settings from backend for camera {args.camera_id}: roi={roi_str} loiter_seconds={loiter_seconds}")
+        print(
+            f"Loaded settings from backend for camera {args.camera_id}: roi={roi_str} loiter_seconds={loiter_seconds}"
+        )
 
     model = load_model(args.model)
     cap = open_source(args.source)
@@ -72,36 +75,40 @@ def run(args: argparse.Namespace) -> None:
             break
 
         result = model.track(
-            frame, persist=True, tracker=args.tracker, classes=[PERSON_CLASS_ID],
-            conf=args.conf, verbose=False,
+            frame,
+            persist=True,
+            tracker=args.tracker,
+            classes=[PERSON_CLASS_ID],
+            conf=args.conf,
+            verbose=False,
         )[0]
         now = time.time()
 
         cv2.rectangle(frame, (roi[0], roi[1]), (roi[2], roi[3]), (255, 255, 0), 2)
-        cv2.putText(frame, "restricted area", (roi[0], max(roi[1] - 8, 0)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+        cv2.putText(
+            frame, "restricted area", (roi[0], max(roi[1] - 8, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1
+        )
 
         boxes = result.boxes
         if boxes is not None and boxes.id is not None:
-            for box, track_id in zip(boxes, boxes.id):
+            for box, track_id in zip(boxes, boxes.id, strict=True):
                 tid = int(track_id)
                 inside = point_in_roi(box_center(box), roi)
-                state = track_state.setdefault(
-                    tid, {"inside": False, "entered_at": None, "loiter_alerted": False}
-                )
+                state = track_state.setdefault(tid, {"inside": False, "entered_at": None, "loiter_alerted": False})
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 color = (0, 0, 255) if inside else (0, 255, 0)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(frame, f"ID {tid}", (x1, max(y1 - 8, 0)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.putText(frame, f"ID {tid}", (x1, max(y1 - 8, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
                 if inside and not state["inside"]:
                     alerts.append((frame_idx, "ROI_ENTRY", tid))
                     print(f"[frame {frame_idx}] ALERT: ID {tid} entered restricted area")
                     if client is not None:
                         client.post_alert(
-                            args.camera_id, "ROI_ENTRY", "medium",
+                            args.camera_id,
+                            "ROI_ENTRY",
+                            "medium",
                             f"Person (track {tid}) entered restricted area",
                             extra_data={"track_id": tid, "frame": frame_idx},
                         )
@@ -118,7 +125,9 @@ def run(args: argparse.Namespace) -> None:
                         print(f"[frame {frame_idx}] ALERT: ID {tid} loitering for {duration:.1f}s")
                         if client is not None:
                             client.post_alert(
-                                args.camera_id, "LOITERING", "high",
+                                args.camera_id,
+                                "LOITERING",
+                                "high",
                                 f"Person (track {tid}) loitering for {duration:.1f}s",
                                 extra_data={"track_id": tid, "frame": frame_idx, "duration_seconds": duration},
                             )
@@ -156,11 +165,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tracker", default="bytetrack.yaml", help="Ultralytics tracker config")
     parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold for person detections")
     parser.add_argument("--roi", default="0.5,0.0,1.0,1.0", help="x1,y1,x2,y2 as fractions of frame size")
-    parser.add_argument("--loiter-seconds", type=float, default=5.0, help="Seconds inside the ROI before a loitering alert fires")
+    parser.add_argument(
+        "--loiter-seconds", type=float, default=5.0, help="Seconds inside the ROI before a loitering alert fires"
+    )
     parser.add_argument("--headless", action="store_true", help="Run without a display window (for automated testing)")
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
-    parser.add_argument("--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set")
+    parser.add_argument(
+        "--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set"
+    )
     add_backend_args(parser)
     return parser.parse_args()
 

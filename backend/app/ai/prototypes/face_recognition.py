@@ -1,6 +1,4 @@
-"""Phase 1 prototype: register faces -> recognize known vs unknown on webcam.
-
-Standalone script, not yet wired into the FastAPI backend.
+"""Register faces -> recognize known vs unknown on a camera feed.
 
 Register a person (averages embeddings over a few captured frames):
     python -m app.ai.prototypes.face_recognition --register --name "Ahmed" --source 0
@@ -8,9 +6,14 @@ Register a person (averages embeddings over a few captured frames):
 Run recognition against everyone registered so far:
     python -m app.ai.prototypes.face_recognition --source 0
 
+Wired to the backend (raises an UNKNOWN_FACE alert, at most once per
+--alert-cooldown seconds, when an unregistered face is seen):
+    python -m app.ai.prototypes.face_recognition --source 0 --camera-id 1
+
 Face embeddings are biometric data -> stored only in the gitignored
 `face_db/` directory next to this script, never committed.
 """
+
 import argparse
 import pickle
 import time
@@ -19,6 +22,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 from insightface.app import FaceAnalysis
+
+from app.ai.prototypes.backend_client import add_backend_args, build_client
 
 DB_PATH = Path(__file__).parent / "face_db" / "embeddings.pkl"
 
@@ -112,17 +117,33 @@ def recognize(args: argparse.Namespace, app: FaceAnalysis) -> None:
             cv2.destroyAllWindows()
         return
 
+    client = build_client(args)
     cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
     if not cap.isOpened():
         raise RuntimeError(f"Could not open video source: {args.source}")
 
     frame_idx = 0
     t_start = time.time()
+    last_unknown_alert = float("-inf")
     while True:
         ok, frame = cap.read()
         if not ok:
             break
-        _recognize_frame(frame, app, db, args.threshold)
+        names = _recognize_frame(frame, app, db, args.threshold)
+        now = time.time()
+        # No tracking here, so a cooldown (not per-person state) keeps one
+        # lingering unknown face from raising an alert every frame.
+        if "Unknown" in names and now - last_unknown_alert >= args.alert_cooldown:
+            last_unknown_alert = now
+            print(f"[frame {frame_idx}] ALERT: unknown face detected")
+            if client is not None:
+                client.post_alert(
+                    args.camera_id,
+                    "UNKNOWN_FACE",
+                    "medium",
+                    "Unregistered person detected",
+                    extra_data={"frame": frame_idx, "faces_in_frame": len(names)},
+                )
         if out_dir and frame_idx % args.frame_sample_every == 0:
             cv2.imwrite(str(out_dir / f"frame_{frame_idx:04d}.png"), frame)
         if not args.headless:
@@ -139,17 +160,26 @@ def recognize(args: argparse.Namespace, app: FaceAnalysis) -> None:
         cv2.destroyAllWindows()
 
 
-def _recognize_frame(frame, app: FaceAnalysis, db: dict[str, np.ndarray], threshold: float) -> None:
+def _recognize_frame(frame: np.ndarray, app: FaceAnalysis, db: dict[str, np.ndarray], threshold: float) -> list[str]:
+    """Annotates the frame in place and returns the matched name per detected face."""
+    names: list[str] = []
     faces = app.get(frame)
     for face in faces:
         name, score = match_face(face.normed_embedding, db, threshold)
+        names.append(name)
         x1, y1, x2, y2 = map(int, face.bbox)
         color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         cv2.putText(
-            frame, f"{name} ({score:.2f})", (x1, max(y1 - 8, 0)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2,
+            frame,
+            f"{name} ({score:.2f})",
+            (x1, max(y1 - 8, 0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            color,
+            2,
         )
+    return names
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,7 +193,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headless", action="store_true", help="Run without a display window (for automated testing)")
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = unlimited)")
     parser.add_argument("--save-frames", default="", help="Directory to save sample annotated frames")
-    parser.add_argument("--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set")
+    parser.add_argument(
+        "--frame-sample-every", type=int, default=15, help="Save every Nth frame when --save-frames is set"
+    )
+    parser.add_argument("--alert-cooldown", type=float, default=30.0, help="Min seconds between UNKNOWN_FACE alerts")
+    add_backend_args(parser)
     return parser.parse_args()
 
 

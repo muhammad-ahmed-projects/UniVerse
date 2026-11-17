@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_role
 from app.db.session import get_db
-from app.models.camera import Camera
+from app.models.camera import Camera, CameraStatus
 from app.models.camera_settings import CameraSettings
 from app.models.user import UserRole
-from app.schemas.camera import CameraCreate, CameraOut, CameraUpdate
+from app.schemas.camera import CameraCreate, CameraHeartbeat, CameraOut, CameraUpdate
 from app.schemas.camera_settings import CameraSettingsOut, CameraSettingsUpdate
 from app.services.ws_manager import manager
 
@@ -31,7 +34,9 @@ def get_camera(camera_id: int, db: Session = Depends(get_db)) -> Camera:
 
 
 @router.post(
-    "", response_model=CameraOut, status_code=status.HTTP_201_CREATED,
+    "",
+    response_model=CameraOut,
+    status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def create_camera(payload: CameraCreate, db: Session = Depends(get_db)) -> Camera:
@@ -43,28 +48,64 @@ def create_camera(payload: CameraCreate, db: Session = Depends(get_db)) -> Camer
 
 
 @router.put(
-    "/{camera_id}", response_model=CameraOut,
+    "/{camera_id}",
+    response_model=CameraOut,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
-async def update_camera(camera_id: int, payload: CameraUpdate, db: Session = Depends(get_db)) -> Camera:
+def update_camera(
+    camera_id: int,
+    payload: CameraUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> Camera:
     camera = _get_camera_or_404(camera_id, db)
-    status_changed = "status" in payload.model_dump(exclude_unset=True) and payload.status != camera.status
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    status_changed = "status" in changes and changes["status"] != camera.status
+    for field, value in changes.items():
         setattr(camera, field, value)
     db.commit()
     db.refresh(camera)
 
     if status_changed:
-        await manager.broadcast({
-            "type": "camera_status",
-            "camera_id": camera.id,
-            "status": camera.status.value,
-        })
+        background_tasks.add_task(manager.broadcast, _status_message(camera))
     return camera
 
 
+@router.post(
+    "/{camera_id}/heartbeat",
+    response_model=CameraOut,
+    dependencies=[Depends(get_current_user)],
+)
+def camera_heartbeat(
+    camera_id: int,
+    payload: CameraHeartbeat,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> Camera:
+    """Status report from a camera-health process (any authenticated user, so
+    a security_operator service login can run it). Broadcasts only on change.
+    """
+    camera = _get_camera_or_404(camera_id, db)
+    new_status = CameraStatus(payload.status)
+    status_changed = camera.status != new_status
+    camera.status = new_status
+    if new_status == CameraStatus.ONLINE:
+        camera.last_seen_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(camera)
+
+    if status_changed:
+        background_tasks.add_task(manager.broadcast, _status_message(camera))
+    return camera
+
+
+def _status_message(camera: Camera) -> dict:
+    return {"type": "camera_status", "camera_id": camera.id, "status": camera.status.value}
+
+
 @router.delete(
-    "/{camera_id}", status_code=status.HTTP_204_NO_CONTENT,
+    "/{camera_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def delete_camera(camera_id: int, db: Session = Depends(get_db)) -> None:
@@ -74,7 +115,8 @@ def delete_camera(camera_id: int, db: Session = Depends(get_db)) -> None:
 
 
 @router.get(
-    "/{camera_id}/settings", response_model=CameraSettingsOut,
+    "/{camera_id}/settings",
+    response_model=CameraSettingsOut,
     dependencies=[Depends(get_current_user)],
 )
 def get_camera_settings(camera_id: int, db: Session = Depends(get_db)) -> CameraSettings:
@@ -82,19 +124,29 @@ def get_camera_settings(camera_id: int, db: Session = Depends(get_db)) -> Camera
     settings = db.query(CameraSettings).filter(CameraSettings.camera_id == camera_id).first()
     if settings is None:
         # Defaults, created on first read so the UI always has a row to edit.
+        # Two first reads can race (e.g. dashboard + an AI script starting); the
+        # unique camera_id constraint makes the loser fall back to the winner's row.
         settings = CameraSettings(camera_id=camera_id)
         db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            settings = db.query(CameraSettings).filter(CameraSettings.camera_id == camera_id).one()
+        else:
+            db.refresh(settings)
     return settings
 
 
 @router.put(
-    "/{camera_id}/settings", response_model=CameraSettingsOut,
+    "/{camera_id}/settings",
+    response_model=CameraSettingsOut,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def update_camera_settings(
-    camera_id: int, payload: CameraSettingsUpdate, db: Session = Depends(get_db),
+    camera_id: int,
+    payload: CameraSettingsUpdate,
+    db: Session = Depends(get_db),
 ) -> CameraSettings:
     _get_camera_or_404(camera_id, db)
     settings = db.query(CameraSettings).filter(CameraSettings.camera_id == camera_id).first()
