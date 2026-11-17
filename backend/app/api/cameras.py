@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_role
 from app.db.session import get_db
 from app.models.camera import Camera
+from app.models.camera_settings import CameraSettings
 from app.models.user import UserRole
 from app.schemas.camera import CameraCreate, CameraOut, CameraUpdate
+from app.schemas.camera_settings import CameraSettingsOut, CameraSettingsUpdate
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
@@ -69,3 +71,38 @@ def delete_camera(camera_id: int, db: Session = Depends(get_db)) -> None:
     camera = _get_camera_or_404(camera_id, db)
     db.delete(camera)
     db.commit()
+
+
+@router.get(
+    "/{camera_id}/settings", response_model=CameraSettingsOut,
+    dependencies=[Depends(get_current_user)],
+)
+def get_camera_settings(camera_id: int, db: Session = Depends(get_db)) -> CameraSettings:
+    _get_camera_or_404(camera_id, db)
+    settings = db.query(CameraSettings).filter(CameraSettings.camera_id == camera_id).first()
+    if settings is None:
+        # Defaults, created on first read so the UI always has a row to edit.
+        settings = CameraSettings(camera_id=camera_id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+@router.put(
+    "/{camera_id}/settings", response_model=CameraSettingsOut,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+def update_camera_settings(
+    camera_id: int, payload: CameraSettingsUpdate, db: Session = Depends(get_db),
+) -> CameraSettings:
+    _get_camera_or_404(camera_id, db)
+    settings = db.query(CameraSettings).filter(CameraSettings.camera_id == camera_id).first()
+    if settings is None:
+        settings = CameraSettings(camera_id=camera_id)
+        db.add(settings)
+    for field, value in payload.model_dump().items():
+        setattr(settings, field, value)
+    db.commit()
+    db.refresh(settings)
+    return settings

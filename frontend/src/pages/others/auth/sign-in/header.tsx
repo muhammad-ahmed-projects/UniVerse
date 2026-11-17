@@ -8,7 +8,7 @@ export interface SignInHeaderProps {
 
 export default function SignInHeader({
   title = "Sign In",
-  description = "Enter your email and password to sign in!",
+  description = "Enter your username and password to sign in!",
   className,
 }: SignInHeaderProps) {
   return (

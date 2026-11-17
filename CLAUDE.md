@@ -388,17 +388,24 @@ all seven behaviors against the webcam, each one individually testable.
   Verified: WS client receives a new alert's full payload live after a
   REST POST from a separate connection, no refresh; invalid token
   rejected at handshake (403)
-- [ ] Frontend dashboard pages wired to backend — IN PROGRESS, see
+- [x] Frontend dashboard pages wired to backend — see
   `/docs/evaluation-results.md`:
   - [x] Auth pages (login) wired to the real backend
+  - [x] Overview/home page — real stat cards (cameras online, total
+    alerts, open incidents, registered people) + recent alerts list,
+    replacing the TailAdmin Ecommerce demo
   - [x] Camera list/status page
   - [x] Alerts feed
   - [x] Incident detail view: acknowledge/resolve flow
   - [x] Registered-people management page
-  - [ ] Settings (ROI/loitering/tamper sensitivity configurable from UI)
-    — not built; these are still CLI flags on the Phase 1 scripts, not
-    persisted backend settings yet, so there's nothing for a settings
-    page to control until that wiring exists
+  - [x] Settings page — per-camera ROI/loitering/tamper thresholds,
+    backed by a real `camera_settings` table (migration `a7a79d74c895`)
+    and `GET/PUT /cameras/{id}/settings` (admin-only write). Not yet
+    consumed by the Phase 1 AI scripts themselves (see Phase 3 step 3)
+  - Dashboard cleanup: removed all unrelated TailAdmin demo nav/routes
+    (Calendar, Profile, Forms, Tables, Charts, UI Elements, Blank page,
+    Sign Up, the sidebar's "Purchase Plan" upsell widget) and replaced
+    the fake "team activity" notification-bell data with real alerts
   - [ ] Dedicated live-WebSocket-in-browser test (two tabs, confirm a
     new alert appears without refresh) — backend-level WS delivery is
     verified; the rendered-dashboard case specifically is not yet

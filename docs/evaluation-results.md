@@ -370,5 +370,55 @@ real Vite dev server and FastAPI backend together.
 
 **Verdict:** PASS for what was built and tested -- a real, backend-wired
 dashboard a supervisor can click through (not a mockup), covering
-sections 1-5 of Phase 4's plan. Section 6 (Settings) is explicitly not
-done yet and is not being claimed as done.
+sections 1-5 of Phase 4's plan.
+
+## Settings Page + Dashboard Cleanup (Phase 4, step 6 + polish)
+
+**Backend:** new `camera_settings` table (one row per camera, migration
+`a7a79d74c895`) holding ROI rectangle (x1/y1/x2/y2 fractions),
+loitering threshold, and the 3 tamper-sensitivity ratios used by
+`roi_loitering.py` and `tamper_detection.py`'s CLI flags.
+`GET /cameras/{id}/settings` creates a default row on first read;
+`PUT` is admin-only and validates `roi_x1 < roi_x2` / `roi_y1 < roi_y2`
+(422 on violation), consistent with the "configurable rules, not
+hardcoded" standard in Section 11.
+
+**Tests (curl):**
+- `GET` on a camera with no settings yet: 200, returns defaults and
+  persists them.
+- `PUT` as `security_operator`: 403.
+- `PUT` as `admin` with valid values: 200, values persisted (re-`GET`
+  confirms).
+- `PUT` with `roi_x1 > roi_x2`: 422 (model validator catches inverted
+  ROI before it's saved).
+- `GET`/`PUT` on a nonexistent camera id: 404.
+
+**Frontend:** new `/settings` page -- camera picker + a form for all 9
+thresholds, admin-only edit (operators see the form read-only via a
+disabled `<fieldset>`, not just a hidden button). Verified via the same
+headless-Chrome/CDP method as the rest of Phase 4: loads real saved
+values, camera picker shows the camera's name (fixed a first pass where
+it rendered the raw id instead, via `SelectValue`'s render-prop
+pattern), zero console errors.
+
+**Dashboard cleanup** (explicit request: keep what the project needs
+now or later, remove everything else so the dashboard reads clean for
+a supervisor demo):
+- Removed from nav + routes: Calendar, Profile, Forms, Tables, Charts
+  (bar/line demo), UI Elements showcase (alerts/avatars/badges/
+  buttons/images/videos), Blank page, Sign Up (registration is
+  admin-only via the API, there's no self-service signup flow to link
+  to), and the sidebar's "Purchase Plan" TailAdmin upsell widget.
+- Replaced the Ecommerce demo homepage with a real Overview page
+  (stat cards + recent alerts, wired to the actual API).
+- Replaced the notification bell's hardcoded fake "team activity" data
+  (people commenting on fake projects) with real recent alerts, since
+  showing fabricated activity data in a security-system demo would be
+  actively misleading.
+- Bundle size dropped from ~2.73 MB to ~810 KB (gzip ~799 KB -> ~249 KB)
+  as a side effect of removing ~400 unused modules -- a signal the
+  cleanup actually removed dead code, not just hid it.
+
+**Verdict:** PASS. Phase 4 is now fully done (all 6 steps), and the
+dashboard only contains pages that map to an actual project requirement
+or a already-built feature.

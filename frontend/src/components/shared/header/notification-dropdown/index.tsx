@@ -1,9 +1,4 @@
-import {
-  Avatar,
-  AvatarBadge,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,23 +8,51 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useTranslations } from "@/i18n";
-import { BellIcon, DotIcon, XIcon } from "@/icons";
-import { cn, getInitials } from "@/utils";
-import { Fragment, useState } from "react";
+import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { type Alert, alertsApi } from "@/services";
+import { BellIcon, XIcon } from "@/icons";
+import { cn } from "@/utils";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { notifications } from "./data";
+
+function priorityColor(priority: string): "error" | "warning" | "gray" {
+  if (priority === "high") return "error";
+  if (priority === "low") return "gray";
+  return "warning";
+}
 
 export default function NotificationDropdown() {
-  const t = useTranslations("header.notifications");
   const [isOpen, setIsOpen] = useState(false);
-  const [notifying, setNotifying] = useState(true);
+  const [notifying, setNotifying] = useState(false);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+
+  useEffect(() => {
+    alertsApi.list().then((list) => setAlerts(list.slice(0, 5)));
+  }, []);
+
+  useAlertsSocket((msg) => {
+    if (msg.type === "alert") {
+      setNotifying(true);
+      setAlerts((prev) => [
+        {
+          id: msg.id,
+          camera_id: msg.camera_id,
+          alert_type: msg.alert_type,
+          priority: msg.priority as Alert["priority"],
+          message: msg.message,
+          evidence_path: null,
+          extra_data: null,
+          incident_id: null,
+          triggered_at: msg.triggered_at,
+        },
+        ...prev,
+      ].slice(0, 5));
+    }
+  });
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (open) {
-      setNotifying(false);
-    }
+    if (open) setNotifying(false);
   };
 
   return (
@@ -62,13 +85,12 @@ export default function NotificationDropdown() {
       >
         <div className="flex items-center justify-between pb-3">
           <h5 className="text-title-sm font-semibold text-gray-800 dark:text-gray-200">
-            {t("title")}
+            Alerts
           </h5>
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={() => setIsOpen(false)}
-            className="size-"
             aria-label="Close notifications"
           >
             <XIcon className="size-5" />
@@ -79,34 +101,28 @@ export default function NotificationDropdown() {
 
         <ScrollArea scrollbars="vertical" className="h-96">
           <div className="flex flex-col pe-2">
-            {notifications.map((item) => (
-              <Fragment key={item.id}>
-                <DropdownMenuItem className="flex items-start gap-3 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-white/5">
-                  <Avatar size="default">
-                    <AvatarImage src={item.avatar} alt={item.name} />
-                    <AvatarFallback>{getInitials(item.name)}</AvatarFallback>
-                    <AvatarBadge variant={item.status} />
-                  </Avatar>
-                  <span className="block flex-1 text-start">
-                    <span className="mb-1.5 block space-x-1 text-sm text-gray-500 dark:text-gray-400">
+            {alerts.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                No alerts yet.
+              </p>
+            ) : (
+              alerts.map((alert) => (
+                <Fragment key={alert.id}>
+                  <DropdownMenuItem className="flex items-start justify-between gap-3 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-white/5">
+                    <span className="block flex-1 text-start text-sm text-gray-600 dark:text-gray-300">
                       <span className="font-medium text-gray-800 dark:text-white/90">
-                        {item.name}
+                        {alert.alert_type}
                       </span>{" "}
-                      <span>{t(item.actionKey)}</span>{" "}
-                      <span className="font-medium text-gray-800 dark:text-white/90">
-                        {item.project}
-                      </span>
+                      on camera #{alert.camera_id} — {alert.message}
                     </span>
-                    <span className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                      <span>{t("project")}</span>
-                      <DotIcon className="size-2 text-gray-400 dark:text-gray-500" />
-                      <span>{t(item.timeKey, { count: item.timeCount })}</span>
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="my-0.5 bg-gray-100 last-of-type:hidden dark:bg-gray-700" />
-              </Fragment>
-            ))}
+                    <Badge color={priorityColor(alert.priority)} size="sm">
+                      {alert.priority}
+                    </Badge>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-0.5 bg-gray-100 last-of-type:hidden dark:bg-gray-700" />
+                </Fragment>
+              ))
+            )}
           </div>
         </ScrollArea>
 
@@ -114,11 +130,11 @@ export default function NotificationDropdown() {
           variant="outline"
           size="default"
           nativeButton={false}
-          render={<Link to="/" />}
+          render={<Link to="/surveillance-alerts" />}
           className="mt-3 w-full"
           onClick={() => setIsOpen(false)}
         >
-          {t("viewAll")}
+          View All Alerts
         </Button>
       </DropdownMenuContent>
     </DropdownMenu>

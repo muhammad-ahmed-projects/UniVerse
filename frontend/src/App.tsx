@@ -1,24 +1,13 @@
 import ProtectedRoute from "@/components/auth/protected-route";
 import AppLayout from "@/components/layout/app-layout";
-import CalendarPage from "@/pages/main/calendar";
-import EcommercePage from "@/pages/main/dashboard/ecommerce";
-import FormElementsPage from "@/pages/main/forms/form-elements";
-import { BlankPage, Error404Page } from "@/pages/main/pages";
-import ProfilePage from "@/pages/main/profile";
+import { Error404Page } from "@/pages/main/pages";
 import AlertsPage from "@/pages/main/surveillance/alerts";
 import CamerasPage from "@/pages/main/surveillance/cameras";
 import IncidentsPage from "@/pages/main/surveillance/incidents";
+import OverviewPage from "@/pages/main/surveillance/overview";
 import PeoplePage from "@/pages/main/surveillance/people";
-import BasicTablesPage from "@/pages/main/tables/basic-tables";
-import { AuthLayout, SignInPage, SignUpPage } from "@/pages/others/auth";
-import BarChartPage from "@/pages/others/charts/bar-chart";
-import LineChartPage from "@/pages/others/charts/line-chart";
-import Alerts from "@/pages/others/ui-elements/alerts";
-import Avatars from "@/pages/others/ui-elements/avatars";
-import Badges from "@/pages/others/ui-elements/badges";
-import Buttons from "@/pages/others/ui-elements/buttons";
-import Images from "@/pages/others/ui-elements/images";
-import Videos from "@/pages/others/ui-elements/videos";
+import SettingsPage from "@/pages/main/surveillance/settings";
+import { AuthLayout, SignInPage } from "@/pages/others/auth";
 import "flatpickr/dist/flatpickr.css";
 import { Route, Routes } from "react-router";
 
@@ -27,44 +16,19 @@ export default function App() {
     <Routes>
       {/* Dashboard Layout */}
       <Route element={<ProtectedRoute />}>
-      <Route element={<AppLayout />}>
-        <Route index element={<EcommercePage />} />
-
-        {/* Surveillance */}
-        <Route path="/cameras" element={<CamerasPage />} />
-        <Route path="/surveillance-alerts" element={<AlertsPage />} />
-        <Route path="/incidents" element={<IncidentsPage />} />
-        <Route path="/people" element={<PeoplePage />} />
-
-        {/* Others Page */}
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/blank" element={<BlankPage />} />
-
-        {/* Forms */}
-        <Route path="/form-elements" element={<FormElementsPage />} />
-
-        {/* Tables */}
-        <Route path="/basic-tables" element={<BasicTablesPage />} />
-
-        {/* Ui Elements */}
-        <Route path="/alerts" element={<Alerts />} />
-        <Route path="/avatars" element={<Avatars />} />
-        <Route path="/badge" element={<Badges />} />
-        <Route path="/buttons" element={<Buttons />} />
-        <Route path="/images" element={<Images />} />
-        <Route path="/videos" element={<Videos />} />
-
-        {/* Charts */}
-        <Route path="/line-chart" element={<LineChartPage />} />
-        <Route path="/bar-chart" element={<BarChartPage />} />
-      </Route>
+        <Route element={<AppLayout />}>
+          <Route index element={<OverviewPage />} />
+          <Route path="/cameras" element={<CamerasPage />} />
+          <Route path="/surveillance-alerts" element={<AlertsPage />} />
+          <Route path="/incidents" element={<IncidentsPage />} />
+          <Route path="/people" element={<PeoplePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
       </Route>
 
       {/* Auth Layout */}
       <Route element={<AuthLayout />}>
         <Route path="/signin" element={<SignInPage />} />
-        <Route path="/signup" element={<SignUpPage />} />
       </Route>
 
       {/* Full-width / Error / Status Pages */}
