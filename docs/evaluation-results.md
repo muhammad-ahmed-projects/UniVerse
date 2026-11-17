@@ -225,3 +225,29 @@ without needing to physically unplug hardware mid-test; `--timeout 1.0`):
 paths are correctly detected, with offline status reported promptly
 (immediately, and ~1.8s after a 1.0s configured timeout respectively).
 Timeout is CLI-configurable (`--timeout`), not hardcoded.
+
+## Backend API: Auth / RBAC (Phase 3, step 1)
+
+**Module:** `app/api/auth.py`, `app/api/deps.py`, `app/core/security.py` —
+JWT-based auth (PyJWT, HS256, 8h expiry), bcrypt password hashing via
+passlib, role-based access control (`admin` / `security_operator`).
+
+**Tests (curl against a local uvicorn instance, port 8010):**
+- Login happy path (seeded `admin`/`admin123`): 200, valid JWT returned.
+- Login with wrong password: 401.
+- Login with nonexistent username: 401.
+- `GET /auth/me` with valid token: 200, correct user data returned.
+- `GET /auth/me` with no token: 401.
+- `GET /auth/me` with a garbage/malformed token: 401.
+- `POST /auth/register` as `security_operator` role: **403** — RBAC
+  correctly blocks a non-admin from creating accounts.
+- `POST /auth/register` as `admin`: **201**, user created.
+- `POST /auth/register` with a duplicate username: 400.
+- `POST /auth/register` with a password under the 8-char minimum: 422
+  (Pydantic validation, rejected before it reaches business logic).
+
+**Verdict:** PASS — happy path and invalid-input cases both return the
+correct status codes; RBAC actually restricts the `/auth/register`
+endpoint by role, not just by hiding a UI button, per Section 12's
+explicit requirement ("Confirm admin vs. security-operator roles
+actually restrict access, not just hide UI elements").

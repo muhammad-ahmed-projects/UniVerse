@@ -9,6 +9,8 @@ click==8.5.1
 colorama==0.4.6
 contourpy==1.4.0
 cycler==0.12.1
+dnspython==2.9.2
+email-validator==2.4.0
 fastapi==0.162.2
 filelock==4.2.10
 flatbuffers==25.12.19
@@ -48,9 +50,11 @@ psycopg2-binary==2.9.13
 pydantic==2.14.3
 pydantic-settings==2.16.2
 pydantic_core==2.50.4
+PyJWT==2.15.1
 pyparsing==3.3.3
 python-dateutil==4.0.0
 python-dotenv==1.2.4
+python-multipart==0.0.34
 PyYAML==6.0.3
 requests==2.34.2
 scikit-image==0.26.0
