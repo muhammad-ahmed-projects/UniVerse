@@ -21,7 +21,8 @@ export interface CameraCreateInput {
 export const camerasApi = {
   list: () => apiClient.get<Camera[]>("/cameras"),
   get: (id: number) => apiClient.get<Camera>(`/cameras/${id}`),
-  create: (input: CameraCreateInput) => apiClient.post<Camera>("/cameras", input),
+  create: (input: CameraCreateInput) =>
+    apiClient.post<Camera>("/cameras", input),
   updateStatus: (id: number, status: CameraStatus) =>
     apiClient.put<Camera>(`/cameras/${id}`, { status }),
   remove: (id: number) => apiClient.delete<void>(`/cameras/${id}`),

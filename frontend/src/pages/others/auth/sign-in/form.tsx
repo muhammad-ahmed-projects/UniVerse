@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/input-group";
 import { useAuth } from "@/contexts";
 import { ApiError } from "@/services";
-import { useNavigate } from "react-router";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
@@ -20,7 +19,6 @@ export default function SignInFormFields() {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { login } = useAuth();
-  const navigate = useNavigate();
 
   const {
     register,
@@ -38,8 +36,8 @@ export default function SignInFormFields() {
   const handleFormSubmit = async (data: SignInFormData) => {
     setFormError(null);
     try {
+      // SignInPage redirects once the auth context has a user.
       await login(data.username, data.password);
-      navigate("/");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Login failed");
     }
@@ -64,7 +62,8 @@ export default function SignInFormFields() {
         <Input
           {...register("username")}
           type="text"
-          placeholder="admin"
+          placeholder="Enter your username"
+          autoComplete="username"
           aria-invalid={errors.username ? "true" : undefined}
         />
         <FieldError errors={[errors.username]} />
@@ -79,6 +78,7 @@ export default function SignInFormFields() {
             {...register("password")}
             type={showPassword ? "text" : "password"}
             placeholder="Enter your password"
+            autoComplete="current-password"
             aria-invalid={errors.password ? "true" : undefined}
           />
           <InputGroupAddon align="inline-end">

@@ -25,28 +25,34 @@ export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
-    alertsApi.list().then((list) => setAlerts(list.slice(0, 5)));
+    alertsApi
+      .list({ limit: 5 })
+      .then(setAlerts)
+      .catch(() => setLoadFailed(true));
   }, []);
 
   useAlertsSocket((msg) => {
     if (msg.type === "alert") {
       setNotifying(true);
-      setAlerts((prev) => [
-        {
-          id: msg.id,
-          camera_id: msg.camera_id,
-          alert_type: msg.alert_type,
-          priority: msg.priority as Alert["priority"],
-          message: msg.message,
-          evidence_path: null,
-          extra_data: null,
-          incident_id: null,
-          triggered_at: msg.triggered_at,
-        },
-        ...prev,
-      ].slice(0, 5));
+      setAlerts((prev) =>
+        [
+          {
+            id: msg.id,
+            camera_id: msg.camera_id,
+            alert_type: msg.alert_type,
+            priority: msg.priority as Alert["priority"],
+            message: msg.message,
+            evidence_path: null,
+            extra_data: null,
+            incident_id: null,
+            triggered_at: msg.triggered_at,
+          },
+          ...prev,
+        ].slice(0, 5),
+      );
     }
   });
 
@@ -103,7 +109,7 @@ export default function NotificationDropdown() {
           <div className="flex flex-col pe-2">
             {alerts.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                No alerts yet.
+                {loadFailed ? "Couldn't load alerts." : "No alerts yet."}
               </p>
             ) : (
               alerts.map((alert) => (

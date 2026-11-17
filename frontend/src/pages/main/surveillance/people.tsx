@@ -33,12 +33,18 @@ export default function PeoplePage() {
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [removingId, setRemovingId] = useState<number | null>(null);
+  const isAdmin = user?.role === "admin";
 
   const load = () => {
     peopleApi
       .list()
       .then(setPeople)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load people"));
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.message : "Failed to load people",
+        ),
+      );
   };
 
   useEffect(load, []);
@@ -52,15 +58,36 @@ export default function PeoplePage() {
       setIsDialogOpen(false);
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to register person");
+      setError(
+        err instanceof ApiError ? err.message : "Failed to register person",
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleRemove = async (person: Person) => {
+    if (!window.confirm(`Remove ${person.name} from the registry?`)) return;
+    setRemovingId(person.id);
+    setError(null);
+    try {
+      await peopleApi.remove(person.id);
+      setPeople((prev) => prev?.filter((p) => p.id !== person.id) ?? prev);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to remove person",
+      );
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
   return (
     <div>
-      <PageMeta title="Registered People | UniVerse" description="Consent-based face recognition registry" />
+      <PageMeta
+        title="Registered People | UniVerse"
+        description="Consent-based face recognition registry"
+      />
       <PageBreadcrumb pageTitle="Registered People" />
 
       <ComponentCard
@@ -68,9 +95,11 @@ export default function PeoplePage() {
         description="Individuals authorized for face-recognition matching. Face embeddings are captured separately via the AI registration script; this registry tracks the consent-based record."
       >
         <div className="mb-4 flex justify-end">
-          {user?.role === "admin" && (
+          {isAdmin && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <Button onClick={() => setIsDialogOpen(true)}>Register Person</Button>
+              <Button onClick={() => setIsDialogOpen(true)}>
+                Register Person
+              </Button>
               <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Register Person</DialogTitle>
@@ -78,15 +107,25 @@ export default function PeoplePage() {
                 <div className="space-y-4">
                   <Field>
                     <FieldLabel>Name</FieldLabel>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Full name"
+                    />
                   </Field>
                   <Field>
                     <FieldLabel>Notes</FieldLabel>
-                    <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+                    <Input
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Optional"
+                    />
                   </Field>
                 </div>
                 <DialogFooter>
-                  <DialogClose render={<Button variant="outline">Cancel</Button>} />
+                  <DialogClose
+                    render={<Button variant="outline">Cancel</Button>}
+                  />
                   <Button onClick={handleCreate} disabled={isSaving || !name}>
                     {isSaving ? <Spinner /> : "Save"}
                   </Button>
@@ -116,21 +155,60 @@ export default function PeoplePage() {
               <Table>
                 <TableHeader className="border-b border-gray-100 dark:border-white/5">
                   <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Name</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Notes</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Status</TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Name
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Notes
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Status
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell
+                        isHeader
+                        className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                      >
+                        Action
+                      </TableCell>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {people.map((person) => (
                     <TableRow key={person.id}>
-                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">{person.name}</TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{person.notes ?? "—"}</TableCell>
+                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
+                        {person.name}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {person.notes ?? "—"}
+                      </TableCell>
                       <TableCell className="px-5 py-4">
                         <Badge color={person.is_active ? "success" : "gray"}>
                           {person.is_active ? "active" : "inactive"}
                         </Badge>
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell className="px-5 py-4">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={removingId === person.id}
+                            onClick={() => void handleRemove(person)}
+                          >
+                            {removingId === person.id ? <Spinner /> : "Remove"}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

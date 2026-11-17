@@ -12,6 +12,7 @@ import {
   getStoredToken,
   login as loginRequest,
   logout as logoutRequest,
+  UNAUTHORIZED_EVENT,
 } from "@/services";
 
 type AuthContextType = {
@@ -25,14 +26,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => getStoredToken() !== null);
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
+    if (!getStoredToken()) return;
     getCurrentUser()
       .then(setUser)
       .catch(() => {
@@ -40,6 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       })
       .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => setUser(null);
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () =>
+      window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {

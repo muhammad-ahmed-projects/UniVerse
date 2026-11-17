@@ -15,6 +15,7 @@ export interface PersonCreateInput {
 
 export const peopleApi = {
   list: () => apiClient.get<Person[]>("/people"),
-  create: (input: PersonCreateInput) => apiClient.post<Person>("/people", input),
+  create: (input: PersonCreateInput) =>
+    apiClient.post<Person>("/people", input),
   remove: (id: number) => apiClient.delete<void>(`/people/${id}`),
 };

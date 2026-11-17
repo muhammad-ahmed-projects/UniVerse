@@ -1,50 +1,104 @@
 import { useEffect, useRef } from "react";
-import { getStoredToken } from "@/services";
+import { getCurrentUser, getStoredToken } from "@/services";
 
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL ?? "ws://localhost:8000";
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL ?? "ws://127.0.0.1:8000";
+// Exponential backoff: 1s, 2s, 4s ... capped at 30s, reset on a successful open.
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
 
 export type SocketMessage =
-  | { type: "alert"; id: number; camera_id: number; alert_type: string; priority: string; message: string; triggered_at: string }
+  | {
+      type: "alert";
+      id: number;
+      camera_id: number;
+      alert_type: string;
+      priority: string;
+      message: string;
+      triggered_at: string;
+    }
   | { type: "camera_status"; camera_id: number; status: string }
   | { type: "incident_update"; id: number; status: string };
 
-/** Connects to /ws/alerts and calls onMessage for every broadcast received.
- * Reconnects with a fixed delay if the connection drops (e.g. backend restart).
+type Listener = (msg: SocketMessage) => void;
+
+// One shared connection per browser tab, opened when the first component
+// subscribes and closed when the last one unsubscribes.
+const listeners = new Set<Listener>();
+let socket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let failedAttempts = 0;
+
+function connect(): void {
+  const token = getStoredToken();
+  if (!token || listeners.size === 0) return;
+
+  const ws = new WebSocket(
+    `${WS_BASE_URL}/ws/alerts?token=${encodeURIComponent(token)}`,
+  );
+  socket = ws;
+  ws.onmessage = (event: MessageEvent<string>) => {
+    let msg: SocketMessage;
+    try {
+      msg = JSON.parse(event.data) as SocketMessage;
+    } catch {
+      return; // ignore malformed payloads
+    }
+    listeners.forEach((listener) => listener(msg));
+  };
+  ws.onopen = () => {
+    failedAttempts = 0;
+  };
+  ws.onclose = () => {
+    // Ignore closes of sockets that were intentionally closed or already replaced.
+    if (socket !== ws) return;
+    socket = null;
+    if (listeners.size === 0 || reconnectTimer !== null) return;
+
+    // A rejected token looks the same as a network drop from here (the server
+    // refuses the handshake). Re-checking the session over HTTP lets the API
+    // client's 401 handling log the user out, which unmounts every subscriber
+    // and stops the reconnect loop.
+    getCurrentUser().catch(() => undefined);
+
+    const delay = Math.min(
+      RECONNECT_BASE_MS * 2 ** failedAttempts,
+      RECONNECT_MAX_MS,
+    );
+    failedAttempts += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  };
+}
+
+function subscribe(listener: Listener): () => void {
+  listeners.add(listener);
+  if (!socket && reconnectTimer === null) connect();
+
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      socket?.close();
+      socket = null;
+    }
+  };
+}
+
+/** Calls onMessage for every /ws/alerts broadcast while the component is mounted.
+ * All subscribers in a tab share one WebSocket, which reconnects after a drop
+ * (e.g. backend restart).
  */
-export function useAlertsSocket(onMessage: (msg: SocketMessage) => void) {
+export function useAlertsSocket(onMessage: Listener): void {
   const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) return;
+    onMessageRef.current = onMessage;
+  });
 
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let closedByEffectCleanup = false;
-
-    function connect() {
-      socket = new WebSocket(`${WS_BASE_URL}/ws/alerts?token=${token}`);
-      socket.onmessage = (event) => {
-        try {
-          onMessageRef.current(JSON.parse(event.data));
-        } catch {
-          // ignore malformed payloads
-        }
-      };
-      socket.onclose = () => {
-        if (!closedByEffectCleanup) {
-          reconnectTimer = setTimeout(connect, 3000);
-        }
-      };
-    }
-
-    connect();
-
-    return () => {
-      closedByEffectCleanup = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      socket?.close();
-    };
-  }, []);
+  useEffect(() => subscribe((msg) => onMessageRef.current(msg)), []);
 }

@@ -17,7 +17,8 @@ import { useEffect, useState } from "react";
 
 function StatusBadge({ status }: { status: Incident["status"] }) {
   if (status === "open") return <Badge color="error">open</Badge>;
-  if (status === "acknowledged") return <Badge color="warning">acknowledged</Badge>;
+  if (status === "acknowledged")
+    return <Badge color="warning">acknowledged</Badge>;
   return <Badge color="success">resolved</Badge>;
 }
 
@@ -30,7 +31,11 @@ export default function IncidentsPage() {
     incidentsApi
       .list()
       .then(setIncidents)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load incidents"));
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.message : "Failed to load incidents",
+        ),
+      );
   };
 
   useEffect(load, []);
@@ -48,7 +53,9 @@ export default function IncidentsPage() {
         action === "acknowledge"
           ? await incidentsApi.acknowledge(incident.id)
           : await incidentsApi.resolve(incident.id);
-      setIncidents((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)) ?? prev);
+      setIncidents(
+        (prev) => prev?.map((i) => (i.id === updated.id ? updated : i)) ?? prev,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed");
     } finally {
@@ -58,7 +65,10 @@ export default function IncidentsPage() {
 
   return (
     <div>
-      <PageMeta title="Incidents | UniVerse" description="Human-reviewed security incidents" />
+      <PageMeta
+        title="Incidents | UniVerse"
+        description="Human-reviewed security incidents"
+      />
       <PageBreadcrumb pageTitle="Incidents" />
 
       <ComponentCard
@@ -77,7 +87,8 @@ export default function IncidentsPage() {
           </div>
         ) : incidents.length === 0 ? (
           <p className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-            No incidents yet. Promote an alert from the Alerts page to create one.
+            No incidents yet. Promote an alert from the Alerts page to create
+            one.
           </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/5">
@@ -85,32 +96,83 @@ export default function IncidentsPage() {
               <Table>
                 <TableHeader className="border-b border-gray-100 dark:border-white/5">
                   <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Title</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Camera</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Priority</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Status</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Created</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Action</TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Title
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Camera
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Priority
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Status
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Created
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Action
+                    </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {incidents.map((incident) => (
                     <TableRow key={incident.id}>
-                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">{incident.title}</TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">#{incident.camera_id}</TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{incident.priority}</TableCell>
-                      <TableCell className="px-5 py-4"><StatusBadge status={incident.status} /></TableCell>
+                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
+                        {incident.title}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        #{incident.camera_id}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {incident.priority}
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <StatusBadge status={incident.status} />
+                      </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {new Date(incident.created_at).toLocaleString()}
                       </TableCell>
                       <TableCell className="px-5 py-4">
                         {incident.status === "open" && (
-                          <Button size="sm" variant="outline" disabled={busyId === incident.id} onClick={() => act(incident, "acknowledge")}>
-                            {busyId === incident.id ? <Spinner /> : "Acknowledge"}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busyId === incident.id}
+                            onClick={() => act(incident, "acknowledge")}
+                          >
+                            {busyId === incident.id ? (
+                              <Spinner />
+                            ) : (
+                              "Acknowledge"
+                            )}
                           </Button>
                         )}
                         {incident.status === "acknowledged" && (
-                          <Button size="sm" disabled={busyId === incident.id} onClick={() => act(incident, "resolve")}>
+                          <Button
+                            size="sm"
+                            disabled={busyId === incident.id}
+                            onClick={() => act(incident, "resolve")}
+                          >
                             {busyId === incident.id ? <Spinner /> : "Resolve"}
                           </Button>
                         )}

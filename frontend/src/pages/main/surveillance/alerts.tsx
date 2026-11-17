@@ -30,7 +30,11 @@ export default function AlertsPage() {
     alertsApi
       .list()
       .then(setAlerts)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load alerts"));
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.message : "Failed to load alerts",
+        ),
+      );
   };
 
   useEffect(load, []);
@@ -49,26 +53,37 @@ export default function AlertsPage() {
           incident_id: null,
           triggered_at: msg.triggered_at,
         };
+        // Dedupe: a reconnect can race with the initial list load.
+        if (prev?.some((a) => a.id === newAlert.id)) return prev;
         return prev ? [newAlert, ...prev] : [newAlert];
       });
+    } else if (msg.type === "incident_update") {
+      // Another operator may have promoted an alert; refresh link state.
+      load();
     }
   });
 
   const promoteToIncident = async (alert: Alert) => {
     setPromotingId(alert.id);
+    setError(null);
     try {
-      await incidentsApi.create({
+      const incident = await incidentsApi.create({
         camera_id: alert.camera_id,
         title: `${alert.alert_type} on camera ${alert.camera_id}`,
         description: alert.message,
         priority: alert.priority,
         source_alert_id: alert.id,
       });
-      setAlerts((prev) =>
-        prev?.map((a) => (a.id === alert.id ? { ...a, incident_id: -1 } : a)) ?? prev,
+      setAlerts(
+        (prev) =>
+          prev?.map((a) =>
+            a.id === alert.id ? { ...a, incident_id: incident.id } : a,
+          ) ?? prev,
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create incident");
+      setError(
+        err instanceof ApiError ? err.message : "Failed to create incident",
+      );
     } finally {
       setPromotingId(null);
     }
@@ -76,7 +91,10 @@ export default function AlertsPage() {
 
   return (
     <div>
-      <PageMeta title="Alerts | UniVerse" description="Live AI-generated security alerts" />
+      <PageMeta
+        title="Alerts | UniVerse"
+        description="Live AI-generated security alerts"
+      />
       <PageBreadcrumb pageTitle="Alerts" />
 
       <ComponentCard
@@ -103,12 +121,42 @@ export default function AlertsPage() {
               <Table>
                 <TableHeader className="border-b border-gray-100 dark:border-white/5">
                   <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Time</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Camera</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Type</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Priority</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Message</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Action</TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Time
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Camera
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Type
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Priority
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Message
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Action
+                    </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
@@ -117,10 +165,18 @@ export default function AlertsPage() {
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {new Date(alert.triggered_at).toLocaleString()}
                       </TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-800 dark:text-white/90">#{alert.camera_id}</TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-800 dark:text-white/90">{alert.alert_type}</TableCell>
-                      <TableCell className="px-5 py-4"><PriorityBadge priority={alert.priority} /></TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{alert.message}</TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-800 dark:text-white/90">
+                        #{alert.camera_id}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-800 dark:text-white/90">
+                        {alert.alert_type}
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <PriorityBadge priority={alert.priority} />
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {alert.message}
+                      </TableCell>
                       <TableCell className="px-5 py-4">
                         {alert.incident_id ? (
                           <Badge color="info">incident created</Badge>
@@ -131,7 +187,11 @@ export default function AlertsPage() {
                             disabled={promotingId === alert.id}
                             onClick={() => promoteToIncident(alert)}
                           >
-                            {promotingId === alert.id ? <Spinner /> : "Create Incident"}
+                            {promotingId === alert.id ? (
+                              <Spinner />
+                            ) : (
+                              "Create Incident"
+                            )}
                           </Button>
                         )}
                       </TableCell>

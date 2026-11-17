@@ -13,10 +13,16 @@ export interface Alert {
 }
 
 export const alertsApi = {
-  list: (params?: { camera_id?: number; unresolved_only?: boolean }) => {
+  list: (params?: {
+    camera_id?: number;
+    unresolved_only?: boolean;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
-    if (params?.camera_id !== undefined) qs.set("camera_id", String(params.camera_id));
+    if (params?.camera_id !== undefined)
+      qs.set("camera_id", String(params.camera_id));
     if (params?.unresolved_only) qs.set("unresolved_only", "true");
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
     const suffix = qs.toString() ? `?${qs}` : "";
     return apiClient.get<Alert[]>(`/alerts${suffix}`);
   },

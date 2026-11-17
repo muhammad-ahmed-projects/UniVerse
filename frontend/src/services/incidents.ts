@@ -29,7 +29,10 @@ export const incidentsApi = {
   list: (status?: IncidentStatus) =>
     apiClient.get<Incident[]>(`/incidents${status ? `?status=${status}` : ""}`),
   get: (id: number) => apiClient.get<Incident>(`/incidents/${id}`),
-  create: (input: IncidentCreateInput) => apiClient.post<Incident>("/incidents", input),
-  acknowledge: (id: number) => apiClient.patch<Incident>(`/incidents/${id}/acknowledge`),
-  resolve: (id: number) => apiClient.patch<Incident>(`/incidents/${id}/resolve`),
+  create: (input: IncidentCreateInput) =>
+    apiClient.post<Incident>("/incidents", input),
+  acknowledge: (id: number) =>
+    apiClient.patch<Incident>(`/incidents/${id}/acknowledge`),
+  resolve: (id: number) =>
+    apiClient.patch<Incident>(`/incidents/${id}/resolve`),
 };

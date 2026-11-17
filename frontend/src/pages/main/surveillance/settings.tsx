@@ -71,28 +71,49 @@ export default function SettingsPage() {
   const [form, setForm] = useState<CameraSettingsInput>(DEFAULTS);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "error" | "success";
+    text: string;
+  } | null>(null);
 
-  useEffect(() => {
-    camerasApi.list().then((list) => {
-      setCameras(list);
-      if (list.length > 0) setSelectedCameraId(String(list[0].id));
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!selectedCameraId) return;
+  const selectCamera = (cameraId: string) => {
+    setSelectedCameraId(cameraId);
+    if (!cameraId) return;
     setIsLoading(true);
     setMessage(null);
     cameraSettingsApi
-      .get(Number(selectedCameraId))
+      .get(Number(cameraId))
       .then((settings) => setForm(settings))
-      .catch((err) => setMessage({ type: "error", text: err instanceof ApiError ? err.message : "Failed to load settings" }))
+      .catch((err: unknown) =>
+        setMessage({
+          type: "error",
+          text:
+            err instanceof ApiError ? err.message : "Failed to load settings",
+        }),
+      )
       .finally(() => setIsLoading(false));
-  }, [selectedCameraId]);
+  };
 
-  const update = <K extends keyof CameraSettingsInput>(key: K, value: CameraSettingsInput[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    camerasApi
+      .list()
+      .then((list) => {
+        setCameras(list);
+        if (list.length > 0) selectCamera(String(list[0].id));
+      })
+      .catch((err: unknown) =>
+        setMessage({
+          type: "error",
+          text:
+            err instanceof ApiError ? err.message : "Failed to load cameras",
+        }),
+      );
+  }, []);
+
+  const update = <K extends keyof CameraSettingsInput>(
+    key: K,
+    value: CameraSettingsInput[K],
+  ) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -101,7 +122,10 @@ export default function SettingsPage() {
       await cameraSettingsApi.update(Number(selectedCameraId), form);
       setMessage({ type: "success", text: "Settings saved." });
     } catch (err) {
-      setMessage({ type: "error", text: err instanceof ApiError ? err.message : "Failed to save settings" });
+      setMessage({
+        type: "error",
+        text: err instanceof ApiError ? err.message : "Failed to save settings",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -111,20 +135,29 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageMeta title="Settings | UniVerse" description="Per-camera ROI, loitering, and tamper thresholds" />
+      <PageMeta
+        title="Settings | UniVerse"
+        description="Per-camera ROI, loitering, and tamper thresholds"
+      />
       <PageBreadcrumb pageTitle="Settings" />
 
       <ComponentCard
         title="Detection Settings"
-        description="ROI zone, loitering threshold, and tamper sensitivity per camera. These values are read by the Phase 1 AI scripts instead of hardcoded defaults."
+        description="ROI zone, loitering threshold, and tamper sensitivity per camera. Detection scripts read these when they start, so restart a camera's detection process to apply changes."
       >
         <div className="mb-6 max-w-xs">
           <Field>
             <FieldLabel>Camera</FieldLabel>
-            <Select value={selectedCameraId} onValueChange={(v) => setSelectedCameraId(v ?? "")}>
+            <Select
+              value={selectedCameraId}
+              onValueChange={(v) => selectCamera(v ?? "")}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a camera">
-                  {(value: string) => cameras.find((c) => String(c.id) === value)?.name ?? "Select a camera"}
+                  {(value: string) =>
+                    cameras.find((c) => String(c.id) === value)?.name ??
+                    "Select a camera"
+                  }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -159,22 +192,46 @@ export default function SettingsPage() {
             No cameras registered yet — add one from the Cameras page first.
           </p>
         ) : (
-          <fieldset disabled={isReadOnly} className="space-y-8 disabled:opacity-60">
+          <fieldset
+            disabled={isReadOnly}
+            className="space-y-8 disabled:opacity-60"
+          >
             <div>
               <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
                 Restricted Area (ROI)
               </h4>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <NumberField label="X1" value={form.roi_x1} onChange={(v) => update("roi_x1", v)} />
-                <NumberField label="Y1" value={form.roi_y1} onChange={(v) => update("roi_y1", v)} />
-                <NumberField label="X2" value={form.roi_x2} onChange={(v) => update("roi_x2", v)} />
-                <NumberField label="Y2" value={form.roi_y2} onChange={(v) => update("roi_y2", v)} />
+                <NumberField
+                  label="X1"
+                  value={form.roi_x1}
+                  onChange={(v) => update("roi_x1", v)}
+                />
+                <NumberField
+                  label="Y1"
+                  value={form.roi_y1}
+                  onChange={(v) => update("roi_y1", v)}
+                />
+                <NumberField
+                  label="X2"
+                  value={form.roi_x2}
+                  onChange={(v) => update("roi_x2", v)}
+                />
+                <NumberField
+                  label="Y2"
+                  value={form.roi_y2}
+                  onChange={(v) => update("roi_y2", v)}
+                />
               </div>
-              <p className="mt-1.5 text-xs text-gray-400">Fractions of frame size (0.0-1.0). X1/Y1 must be less than X2/Y2.</p>
+              <p className="mt-1.5 text-xs text-gray-400">
+                Fractions of frame size (0.0-1.0). X1/Y1 must be less than
+                X2/Y2.
+              </p>
             </div>
 
             <div>
-              <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">Loitering</h4>
+              <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
+                Loitering
+              </h4>
               <div className="max-w-xs">
                 <NumberField
                   label="Loiter threshold (seconds)"
@@ -224,7 +281,9 @@ export default function SettingsPage() {
               </Button>
             )}
             {isReadOnly && (
-              <p className="text-sm text-gray-400">Only admins can change detection settings.</p>
+              <p className="text-sm text-gray-400">
+                Only admins can change detection settings.
+              </p>
             )}
           </fieldset>
         )}

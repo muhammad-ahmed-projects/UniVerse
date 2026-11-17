@@ -51,32 +51,37 @@ export default function CamerasPage() {
     camerasApi
       .list()
       .then(setCameras)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load cameras"));
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.message : "Failed to load cameras",
+        ),
+      );
   };
 
   useEffect(load, []);
 
   useAlertsSocket((msg) => {
-    if (msg.type === "camera_status") {
-      setCameras((prev) =>
-        prev?.map((c) =>
-          c.id === msg.camera_id ? { ...c, status: msg.status as CameraStatus } : c,
-        ) ?? prev,
-      );
-    }
+    // Reload rather than patch, so last_seen_at updates along with status.
+    if (msg.type === "camera_status") load();
   });
 
   const handleCreate = async () => {
     setIsSaving(true);
     try {
-      await camerasApi.create({ name, location: location || undefined, stream_source: streamSource });
+      await camerasApi.create({
+        name,
+        location: location || undefined,
+        stream_source: streamSource,
+      });
       setName("");
       setLocation("");
       setStreamSource("");
       setIsDialogOpen(false);
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create camera");
+      setError(
+        err instanceof ApiError ? err.message : "Failed to create camera",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -84,7 +89,10 @@ export default function CamerasPage() {
 
   return (
     <div>
-      <PageMeta title="Cameras | UniVerse" description="Camera status and management" />
+      <PageMeta
+        title="Cameras | UniVerse"
+        description="Camera status and management"
+      />
       <PageBreadcrumb pageTitle="Cameras" />
 
       <ComponentCard
@@ -102,11 +110,19 @@ export default function CamerasPage() {
                 <div className="space-y-4">
                   <Field>
                     <FieldLabel>Name</FieldLabel>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Front entrance" />
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Front entrance"
+                    />
                   </Field>
                   <Field>
                     <FieldLabel>Location</FieldLabel>
-                    <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Mock office - entrance" />
+                    <Input
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Mock office - entrance"
+                    />
                   </Field>
                   <Field>
                     <FieldLabel>Stream source</FieldLabel>
@@ -118,8 +134,13 @@ export default function CamerasPage() {
                   </Field>
                 </div>
                 <DialogFooter>
-                  <DialogClose render={<Button variant="outline">Cancel</Button>} />
-                  <Button onClick={handleCreate} disabled={isSaving || !name || !streamSource}>
+                  <DialogClose
+                    render={<Button variant="outline">Cancel</Button>}
+                  />
+                  <Button
+                    onClick={handleCreate}
+                    disabled={isSaving || !name || !streamSource}
+                  >
                     {isSaving ? <Spinner /> : "Save"}
                   </Button>
                 </DialogFooter>
@@ -148,19 +169,58 @@ export default function CamerasPage() {
               <Table>
                 <TableHeader className="border-b border-gray-100 dark:border-white/5">
                   <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Name</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Location</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Source</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400">Status</TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Name
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Location
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Source
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Status
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Last seen
+                    </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {cameras.map((camera) => (
                     <TableRow key={camera.id}>
-                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">{camera.name}</TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{camera.location ?? "—"}</TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{camera.stream_source}</TableCell>
-                      <TableCell className="px-5 py-4"><StatusBadge status={camera.status} /></TableCell>
+                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
+                        {camera.name}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {camera.location ?? "—"}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {camera.stream_source}
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <StatusBadge status={camera.status} />
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {camera.last_seen_at
+                          ? new Date(camera.last_seen_at).toLocaleString()
+                          : "—"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

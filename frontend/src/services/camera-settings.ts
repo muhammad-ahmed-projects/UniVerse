@@ -16,7 +16,8 @@ export interface CameraSettings {
 export type CameraSettingsInput = Omit<CameraSettings, "camera_id">;
 
 export const cameraSettingsApi = {
-  get: (cameraId: number) => apiClient.get<CameraSettings>(`/cameras/${cameraId}/settings`),
+  get: (cameraId: number) =>
+    apiClient.get<CameraSettings>(`/cameras/${cameraId}/settings`),
   update: (cameraId: number, input: CameraSettingsInput) =>
     apiClient.put<CameraSettings>(`/cameras/${cameraId}/settings`, input),
 };

@@ -10,7 +10,10 @@ export interface CurrentUser {
   is_active: boolean;
 }
 
-export async function login(username: string, password: string): Promise<CurrentUser> {
+export async function login(
+  username: string,
+  password: string,
+): Promise<CurrentUser> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

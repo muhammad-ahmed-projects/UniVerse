@@ -4,28 +4,29 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
 import {
+  ApiError,
   type Alert,
-  type Camera,
-  type Incident,
-  type Person,
+  type DashboardSummary,
   alertsApi,
-  camerasApi,
-  incidentsApi,
-  peopleApi,
+  dashboardApi,
 } from "@/services";
 import { CameraIcon, OctagonAlertIcon, PieChartIcon, UsersIcon } from "@/icons";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
+const RECENT_ALERTS = 5;
+
 function StatCard({
   icon,
   label,
   value,
+  hint,
   to,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
+  hint?: string;
   to: string;
 }) {
   return (
@@ -38,70 +39,131 @@ function StatCard({
       </div>
       <div>
         <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-        <p className="text-title-sm font-semibold text-gray-800 dark:text-white/90">{value}</p>
+        <p className="text-title-sm font-semibold text-gray-800 dark:text-white/90">
+          {value}
+        </p>
+        {hint && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">{hint}</p>
+        )}
       </div>
     </Link>
   );
 }
 
+function priorityColor(
+  priority: Alert["priority"],
+): "error" | "gray" | "warning" {
+  if (priority === "high") return "error";
+  if (priority === "low") return "gray";
+  return "warning";
+}
+
 export default function OverviewPage() {
-  const [cameras, setCameras] = useState<Camera[] | null>(null);
-  const [alerts, setAlerts] = useState<Alert[] | null>(null);
-  const [incidents, setIncidents] = useState<Incident[] | null>(null);
-  const [people, setPeople] = useState<Person[] | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [recentAlerts, setRecentAlerts] = useState<Alert[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = () => {
-    camerasApi.list().then(setCameras).catch(() => setCameras([]));
-    alertsApi.list().then(setAlerts).catch(() => setAlerts([]));
-    incidentsApi.list().then(setIncidents).catch(() => setIncidents([]));
-    peopleApi.list().then(setPeople).catch(() => setPeople([]));
+    Promise.all([
+      dashboardApi.summary(),
+      alertsApi.list({ limit: RECENT_ALERTS }),
+    ])
+      .then(([summaryData, alertList]) => {
+        setSummary(summaryData);
+        setRecentAlerts(alertList);
+        setError(null);
+      })
+      .catch((err: unknown) =>
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Failed to load dashboard data",
+        ),
+      );
   };
 
   useEffect(load, []);
 
-  useAlertsSocket((msg) => {
-    if (msg.type === "alert" || msg.type === "camera_status" || msg.type === "incident_update") {
-      load();
-    }
-  });
+  useAlertsSocket(() => load());
 
-  const isLoading = cameras === null || alerts === null || incidents === null || people === null;
-  const onlineCount = cameras?.filter((c) => c.status === "online").length ?? 0;
-  const openIncidents = incidents?.filter((i) => i.status !== "resolved").length ?? 0;
-  const recentAlerts = alerts?.slice(0, 5) ?? [];
+  const isLoading = summary === null || recentAlerts === null;
 
   return (
     <div>
-      <PageMeta title="Dashboard | UniVerse" description="Surveillance overview: camera status, alerts, incidents" />
-      <h2 className="text-title-lg mb-6 font-semibold text-gray-800 dark:text-white/90">
+      <PageMeta
+        title="Dashboard | UniVerse"
+        description="Surveillance overview: camera status, alerts, incidents"
+      />
+      <h2 className="mb-6 text-title-lg font-semibold text-gray-800 dark:text-white/90">
         Overview
       </h2>
 
-      {isLoading ? (
+      {error && (
+        <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
+      {isLoading && !error && (
         <div className="flex justify-center py-12">
           <Spinner className="size-6" />
         </div>
-      ) : (
+      )}
+
+      {summary && recentAlerts && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard icon={<CameraIcon className="size-6" />} label="Cameras online" value={`${onlineCount} / ${cameras?.length ?? 0}`} to="/cameras" />
-            <StatCard icon={<PieChartIcon className="size-6" />} label="Total alerts" value={alerts?.length ?? 0} to="/surveillance-alerts" />
-            <StatCard icon={<OctagonAlertIcon className="size-6" />} label="Open incidents" value={openIncidents} to="/incidents" />
-            <StatCard icon={<UsersIcon className="size-6" />} label="Registered people" value={people?.length ?? 0} to="/people" />
+            <StatCard
+              icon={<CameraIcon className="size-6" />}
+              label="Cameras online"
+              value={`${summary.cameras_online} / ${summary.cameras_total}`}
+              to="/cameras"
+            />
+            <StatCard
+              icon={<PieChartIcon className="size-6" />}
+              label="Total alerts"
+              value={summary.alerts_total}
+              hint={`${summary.alerts_unreviewed} awaiting review`}
+              to="/surveillance-alerts"
+            />
+            <StatCard
+              icon={<OctagonAlertIcon className="size-6" />}
+              label="Open incidents"
+              value={summary.incidents_open}
+              to="/incidents"
+            />
+            <StatCard
+              icon={<UsersIcon className="size-6" />}
+              label="Registered people"
+              value={summary.people_registered}
+              to="/people"
+            />
           </div>
 
           <ComponentCard title="Recent Alerts">
             {recentAlerts.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">No alerts yet.</p>
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                No alerts yet.
+              </p>
             ) : (
               <ul className="divide-y divide-gray-100 dark:divide-white/5">
                 {recentAlerts.map((alert) => (
-                  <li key={alert.id} className="flex items-center justify-between py-3 text-sm">
+                  <li
+                    key={alert.id}
+                    className="flex items-center justify-between gap-3 py-3 text-sm"
+                  >
                     <div>
-                      <span className="font-medium text-gray-800 dark:text-white/90">{alert.alert_type}</span>
-                      <span className="ml-2 text-gray-500 dark:text-gray-400">camera #{alert.camera_id} — {alert.message}</span>
+                      <span className="font-medium text-gray-800 dark:text-white/90">
+                        {alert.alert_type}
+                      </span>
+                      <span className="ml-2 text-gray-500 dark:text-gray-400">
+                        camera #{alert.camera_id} — {alert.message}
+                      </span>
+                      <span className="ml-2 text-xs text-gray-400">
+                        {new Date(alert.triggered_at).toLocaleString()}
+                      </span>
                     </div>
-                    <Badge color={alert.priority === "high" ? "error" : alert.priority === "low" ? "gray" : "warning"}>
+                    <Badge color={priorityColor(alert.priority)}>
                       {alert.priority}
                     </Badge>
                   </li>
