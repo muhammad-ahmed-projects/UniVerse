@@ -358,7 +358,10 @@ all seven behaviors against the webcam, each one individually testable.
   detection — see `/docs/evaluation-results.md`; 0 ID switches on a
   continuously-visible person (recorded clip + live webcam); multi-
   person/occlusion re-test still pending before Phase 6
-- [ ] Restricted-area (ROI) + loitering logic
+- [x] Restricted-area (ROI) + loitering logic — see
+  `/docs/evaluation-results.md`; entry alert fires once on transition,
+  loitering alert fires once past threshold (3.1s on a 3s threshold), 0
+  false triggers when ROI doesn't overlap the person
 - [ ] Camera tamper detection (covered/moved/defocused)
 - [ ] Camera health monitoring (offline/feed loss/power loss)
 - [ ] PostgreSQL schema + backend API (auth, cameras, alerts, incidents)

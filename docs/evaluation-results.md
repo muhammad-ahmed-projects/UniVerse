@@ -125,3 +125,37 @@ unknown"):**
 **Verdict:** PARTIAL PASS -- unknown rejection verified, known-face
 recognition verified for 1/3 planned registered faces. Re-test with all
 3 team members before marking this module done.
+
+## Restricted-Area (ROI) + Loitering (Phase 1, step 4)
+
+**Module:** `backend/app/ai/prototypes/roi_loitering.py` — YOLOv8n +
+ByteTrack (reused from step 2), ROI as a configurable fractional rectangle,
+per-track-ID state machine for entry/exit and loiter duration. Alerts fire
+once per transition (entry, loiter-threshold-crossed), not every frame.
+
+**Test setup:** 12s webcam clip, 350 frames, one person present throughout.
+
+**Test A — ROI covering the person's position, 3s loiter threshold:**
+- `ROI_ENTRY` fired once at frame 0 (person already inside ROI at clip
+  start).
+- `LOITERING` fired once at frame 20, reported duration 3.1s (correct,
+  just past the 3.0s threshold).
+- No repeat/duplicate alerts for the remaining 330 frames despite the
+  person staying inside the ROI the whole time — confirms the
+  single-fire-per-transition logic works.
+- Visual check (`frame_0030.png`): ROI rectangle and "restricted area"
+  label render correctly; tracked box turns red (inside) vs. green
+  (outside); `ID 1` label stable.
+- Throughput: 350 frames in 55.1s -> avg 6.3 FPS (YOLO + ByteTrack + ROI
+  check, CPU).
+
+**Test B — negative control, ROI in an empty corner (no overlap with the
+person), same clip:**
+- **0 alerts fired** across all 350 frames — confirms no false triggers
+  from a person moving near, but not inside, a restricted zone.
+
+**Verdict:** PASS — entry alert fires once on transition, loitering alert
+fires once past threshold, no alert spam, no false positive when the
+person never enters the configured zone. Matches Section 12's requirement
+("alert fires on entry, not on false triggers from nearby movement";
+"loitering alert fires once, not repeatedly spammed").
