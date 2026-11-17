@@ -443,6 +443,13 @@ all seven behaviors against the webcam, each one individually testable.
   multi-scenario accuracy pass (lighting/distance/occlusion) with real
   precision/recall/F1 numbers, which needs the team's physical
   mock-environment setup
-- [ ] Documentation + demo environment setup
+- [x] Documentation (Phase 7, step 1) — `/docs/architecture.md`
+  (components, data flow, why AI scripts are separate processes, known
+  constraints), `/docs/setup.md` (fresh-clone-to-running, backend +
+  frontend + an AI script against a real camera), `/docs/api-reference.md`
+  (every endpoint, auth requirement, example `curl` calls). Evaluation
+  results already covered by `/docs/evaluation-results.md`.
+- [ ] Mock-environment demo + final report/presentation (Phase 7, steps
+  2-3) — needs the team's physical camera setup, not yet done
 
 Update this checklist as each item is completed.
