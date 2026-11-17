@@ -476,3 +476,58 @@ defocus) through the new `--camera-id` path specifically -- only the
 settings-load and no-crash path was confirmed for `tamper_detection.py`
 in this session. Should be re-confirmed the next time the team does a
 physical tamper retest (see the still-open Phase 1 step 6 item below).
+
+## Phase 5 — Full-pipeline integration (2026-11-17)
+
+**What was tested:** the complete chain from CLAUDE.md Phase 5 step 1 --
+camera -> AI detection -> alert -> DB -> WebSocket -> dashboard ->
+operator acknowledges/resolves -- with no manual DB edits anywhere, and
+every step going through real code (not mocked or faked).
+
+**Method:** a headless Chrome tab (driven over the raw Chrome DevTools
+Protocol -- no browser-automation MCP tool is available in this
+environment, see the note under "Phase 4 step 6" above) logged in as
+`operator` and opened the real `/surveillance-alerts` page, left running.
+While that tab stayed open (no reload), `roi_loitering.py --source 0
+--camera-id 1 --headless --max-frames 15 --api-username operator
+--api-password operator123` was run against the real webcam in a
+separate process.
+
+**Result, step by step:**
+1. Baseline: 4 alert rows on the page before the script ran.
+2. Script fired a real `ROI_ENTRY` alert (person detected in the
+   configured ROI, frame 0) and POSTed it to the backend via
+   `backend_client.py` (Phase 3 step 3's wiring).
+3. Without any page refresh, the open browser tab's row count went to
+   5 and the new row's text matched the just-fired alert exactly
+   (`ROI_ENTRY`, camera #1, "Person (track 1) entered restricted area")
+   -- confirms the WebSocket push reached the live rendered dashboard,
+   not just the backend-level WS test done earlier.
+4. Clicked that row's "Create Incident" button (real UI click, not an
+   API call from the test script) -> incident created.
+5. Navigated to `/incidents`: the new incident showed `status: open`.
+6. Clicked "Acknowledge" -> row updated to `status: acknowledged`
+   (UI-driven, via `PATCH /incidents/{id}/acknowledge`).
+7. Clicked "Resolve" -> row updated to `status: resolved`, action
+   column showed "Done".
+8. Verified independently via a plain `GET /incidents` API call
+   afterward (not through the test UI): incident id 3 --
+   `status: "resolved"`, `acknowledged_by: 2`, `resolved_by: 2` (the
+   operator's user id), `acknowledged_at` before `resolved_at`,
+   `updated_at` matching the resolve timestamp. No row was ever touched
+   directly in the database.
+9. Zero `Runtime.exceptionThrown` or console error/warning events
+   captured across the whole flow.
+
+**Verdict:** PASS. The full Phase 5 step 1 pipeline runs end-to-end
+through real code with no manual DB edits. This also closes the
+previously-open "dedicated live-WebSocket-in-browser test" item from the
+Phase 4 section above -- the alert delivery was observed live in an
+actual rendered dashboard tab, not just at the backend level.
+
+**Not yet done (Phase 5 step 2 / Phase 6):** this was a single clean
+run with one person/track in frame. Cross-module bugs that only surface
+under load (multiple simultaneous cameras, concurrent alerts, timing
+races) have not been tested, and no FPS/latency/accuracy numbers were
+collected here -- that is Phase 6's job and still needs the team's
+physical mock-camera setup.

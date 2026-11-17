@@ -409,16 +409,29 @@ all seven behaviors against the webcam, each one individually testable.
   - [x] Registered-people management page
   - [x] Settings page — per-camera ROI/loitering/tamper thresholds,
     backed by a real `camera_settings` table (migration `a7a79d74c895`)
-    and `GET/PUT /cameras/{id}/settings` (admin-only write). Not yet
-    consumed by the Phase 1 AI scripts themselves (see Phase 3 step 3)
+    and `GET/PUT /cameras/{id}/settings` (admin-only write). Now
+    consumed by the Phase 1 AI scripts (Phase 3 step 3, done)
   - Dashboard cleanup: removed all unrelated TailAdmin demo nav/routes
     (Calendar, Profile, Forms, Tables, Charts, UI Elements, Blank page,
     Sign Up, the sidebar's "Purchase Plan" upsell widget) and replaced
     the fake "team activity" notification-bell data with real alerts
-  - [ ] Dedicated live-WebSocket-in-browser test (two tabs, confirm a
-    new alert appears without refresh) — backend-level WS delivery is
-    verified; the rendered-dashboard case specifically is not yet
-- [ ] Integration testing (FPS, latency, false-alert rate, accuracy)
+  - [x] Live-WebSocket-in-browser test — confirmed as part of Phase 5
+    full-pipeline integration below: Alerts page stayed open in a real
+    browser tab, a real AI-script-fired alert appeared live with no
+    page refresh
+- [x] Phase 5 full-pipeline integration (camera -> AI detection -> alert
+  -> DB -> WebSocket -> dashboard -> acknowledge/resolve) — see
+  `/docs/evaluation-results.md`; ran `roi_loitering.py --camera-id 1`
+  against the real webcam while the Alerts page was open in a browser;
+  the alert appeared live via WebSocket (no refresh), was promoted to
+  an incident via the UI, then acknowledged and resolved via the UI.
+  Verified via the API afterward: incident status `resolved`,
+  `acknowledged_by`/`resolved_by` both set to the operator's user id,
+  zero manual DB edits. Zero console errors/exceptions captured.
+- [ ] Phase 6: Testing & Evaluation (FPS, latency, false-alert rate,
+  accuracy, camera-offline detection time, tamper-alert accuracy under
+  controlled mock-environment conditions) — needs physical team/camera
+  setup, not yet started
 - [ ] Documentation + demo environment setup
 
 Update this checklist as each item is completed.
