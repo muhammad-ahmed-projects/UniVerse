@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.alert import Alert
 from app.models.camera import Camera
 from app.schemas.alert import ALLOWED_PRIORITIES, AlertCreate, AlertOut
+from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -36,7 +37,7 @@ def get_alert(alert_id: int, db: Session = Depends(get_db)) -> Alert:
     "", response_model=AlertOut, status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(get_current_user)],
 )
-def create_alert(payload: AlertCreate, db: Session = Depends(get_db)) -> Alert:
+async def create_alert(payload: AlertCreate, db: Session = Depends(get_db)) -> Alert:
     if db.get(Camera, payload.camera_id) is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="camera_id does not exist")
     if payload.priority not in ALLOWED_PRIORITIES:
@@ -56,4 +57,14 @@ def create_alert(payload: AlertCreate, db: Session = Depends(get_db)) -> Alert:
     db.add(alert)
     db.commit()
     db.refresh(alert)
+
+    await manager.broadcast({
+        "type": "alert",
+        "id": alert.id,
+        "camera_id": alert.camera_id,
+        "alert_type": alert.alert_type,
+        "priority": alert.priority,
+        "message": alert.message,
+        "triggered_at": alert.triggered_at.isoformat(),
+    })
     return alert

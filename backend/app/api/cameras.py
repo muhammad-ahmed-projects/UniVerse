@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.camera import Camera
 from app.models.user import UserRole
 from app.schemas.camera import CameraCreate, CameraOut, CameraUpdate
+from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
 
@@ -43,12 +44,20 @@ def create_camera(payload: CameraCreate, db: Session = Depends(get_db)) -> Camer
     "/{camera_id}", response_model=CameraOut,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
-def update_camera(camera_id: int, payload: CameraUpdate, db: Session = Depends(get_db)) -> Camera:
+async def update_camera(camera_id: int, payload: CameraUpdate, db: Session = Depends(get_db)) -> Camera:
     camera = _get_camera_or_404(camera_id, db)
+    status_changed = "status" in payload.model_dump(exclude_unset=True) and payload.status != camera.status
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(camera, field, value)
     db.commit()
     db.refresh(camera)
+
+    if status_changed:
+        await manager.broadcast({
+            "type": "camera_status",
+            "camera_id": camera.id,
+            "status": camera.status.value,
+        })
     return camera
 
 

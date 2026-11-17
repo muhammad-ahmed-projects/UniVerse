@@ -11,6 +11,7 @@ from app.models.incident import Incident
 from app.models.user import User
 from app.schemas.alert import ALLOWED_PRIORITIES
 from app.schemas.incident import IncidentCreate, IncidentOut
+from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
@@ -84,7 +85,7 @@ def create_incident(payload: IncidentCreate, db: Session = Depends(get_db)) -> I
 
 
 @router.patch("/{incident_id}/acknowledge", response_model=IncidentOut)
-def acknowledge_incident(
+async def acknowledge_incident(
     incident_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ) -> Incident:
     incident = _get_incident_or_404(incident_id, db)
@@ -96,11 +97,13 @@ def acknowledge_incident(
     incident.acknowledged_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(incident)
+
+    await manager.broadcast({"type": "incident_update", "id": incident.id, "status": incident.status})
     return incident
 
 
 @router.patch("/{incident_id}/resolve", response_model=IncidentOut)
-def resolve_incident(
+async def resolve_incident(
     incident_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ) -> Incident:
     incident = _get_incident_or_404(incident_id, db)
@@ -112,4 +115,6 @@ def resolve_incident(
     incident.resolved_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(incident)
+
+    await manager.broadcast({"type": "incident_update", "id": incident.id, "status": incident.status})
     return incident

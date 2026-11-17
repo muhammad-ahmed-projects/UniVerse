@@ -382,7 +382,12 @@ all seven behaviors against the webcam, each one individually testable.
     curl, including double-action guards (can't ack/resolve twice).
   - **Not yet done:** wiring Phase 1 AI scripts into these services to
     write real alerts automatically (still manual/API-only right now).
-- [ ] WebSocket real-time alerts
+- [x] WebSocket real-time alerts (Phase 3, step 4) — see
+  `/docs/evaluation-results.md`; `GET /ws/alerts?token=...` (JWT-gated),
+  broadcasts on new alert / camera status change / incident ack-resolve.
+  Verified: WS client receives a new alert's full payload live after a
+  REST POST from a separate connection, no refresh; invalid token
+  rejected at handshake (403)
 - [ ] Frontend dashboard pages wired to backend
 - [ ] Integration testing (FPS, latency, false-alert rate, accuracy)
 - [ ] Documentation + demo environment setup

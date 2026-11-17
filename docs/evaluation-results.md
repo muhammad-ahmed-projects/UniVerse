@@ -296,3 +296,23 @@ actually restrict access, not just hide UI elements").
 writes on cameras/people), reject invalid input with 400/422 rather than
 raw DB errors, and the alert -> incident -> acknowledge -> resolve chain
 works end-to-end with correct state transitions and double-action guards.
+
+## WebSocket Real-Time Alerts (Phase 3, step 4)
+
+**Module:** `app/services/ws_manager.py` (in-memory connection registry,
+single-process), `app/api/ws.py` (`GET /ws/alerts?token=...`, JWT-gated).
+Broadcasts fire on: new alert created, camera status changed, incident
+acknowledged/resolved.
+
+**Test 1 — live delivery:** connected a WS client with a valid admin
+token, then created an alert via the REST API from a second connection.
+The WS client received the new alert's full payload (id, camera_id,
+alert_type, priority, message, triggered_at) within the test's 5s
+timeout, with no polling/refresh involved.
+
+**Test 2 — auth rejection:** connecting with an invalid/garbage token
+was rejected at the handshake (HTTP 403, connection never accepted).
+
+**Verdict:** PASS — dashboard-side clients receive new alerts in real
+time without a page refresh, matching Section 12's requirement exactly;
+invalid tokens are rejected before the connection is accepted.
