@@ -159,3 +159,46 @@ fires once past threshold, no alert spam, no false positive when the
 person never enters the configured zone. Matches Section 12's requirement
 ("alert fires on entry, not on false triggers from nearby movement";
 "loitering alert fires once, not repeatedly spammed").
+
+## Camera Tamper Detection (Phase 1, step 6)
+
+**Module:** `backend/app/ai/prototypes/tamper_detection.py` — rule-based
+(brightness, Laplacian-variance sharpness, frame-to-frame diff) against an
+EMA-smoothed rolling baseline, state-transition-based alerting (no
+trained model).
+
+**Test setup:** 20s/591-frame webcam clip. Manual actions performed partway
+through the clip: cover the lens fully with a hand, then move/wave the
+hand near the lens, then hold.
+
+**Results (state-change log):**
+- Frames 0-465: `normal` throughout (baseline capture window).
+- Frame 470: `normal -> moved` — triggered by the frame-diff spike as the
+  hand entered frame fast. Correctly fires on the motion-threshold rule,
+  but this is motion *near* the camera, not the camera itself being
+  physically relocated — see limitation below.
+- Frame 475/480: `-> covered` — brightness 44.5 (baseline ~130), sharpness
+  8.6 (baseline ~58), frame visually solid dark red (hand fully over
+  lens). **Correct, clean match for the "covered" test case.**
+- Frame 507 onward: `-> defocused` — brightness back near baseline (~70-80)
+  but sharpness collapsed (1-2.3). Visually this is a hand/finger very
+  close to (not fully blocking) the lens, not a true optical defocus.
+  State stayed `defocused` through the end of the clip (hand not fully
+  withdrawn before recording stopped).
+
+**Verdict:** PARTIAL PASS.
+- `covered`: confirmed correct, clean signal.
+- `moved`: the motion/frame-diff rule fired correctly for fast nearby
+  motion, but this isn't the same test as physically relocating the
+  camera itself (e.g. knocking it, tilting the mount) — needs a retest
+  where the whole camera is moved, not just a hand waved in front of it.
+- `defocused`: fired, but the triggering condition (hand very close to,
+  not fully covering, the lens) overlaps with "covered" rather than
+  testing true lens defocus. The team's webcam has no manual focus
+  control, so a true optical-defocus test isn't currently reproducible;
+  close-approach blur is being used as a practical proxy in the mock
+  environment, consistent with the proposal's "tuned in the mock
+  environment" methodology, but this should be called out rather than
+  silently treated as equivalent to real defocus.
+- **Not checked off in CLAUDE.md Section 14 yet** — retest `moved` with
+  an actual camera reposition before marking this module done.
