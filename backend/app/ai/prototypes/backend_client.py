@@ -64,7 +64,9 @@ class BackendClient:
 def add_backend_args(parser) -> None:
     parser.add_argument("--camera-id", type=int, default=None,
                          help="If set, read thresholds from camera_settings and write real alerts to the backend")
-    parser.add_argument("--api-base", default="http://localhost:8000", help="Backend base URL")
+    # 127.0.0.1, not localhost: on this Windows setup "localhost" resolves to
+    # ::1 first, which times out (~2s) before falling back to IPv4.
+    parser.add_argument("--api-base", default="http://127.0.0.1:8000", help="Backend base URL")
     parser.add_argument("--api-username", default=os.getenv("UNIVERSE_API_USERNAME"))
     parser.add_argument("--api-password", default=os.getenv("UNIVERSE_API_PASSWORD"))
 

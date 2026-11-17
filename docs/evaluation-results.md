@@ -526,8 +526,45 @@ Phase 4 section above -- the alert delivery was observed live in an
 actual rendered dashboard tab, not just at the backend level.
 
 **Not yet done (Phase 5 step 2 / Phase 6):** this was a single clean
-run with one person/track in frame. Cross-module bugs that only surface
-under load (multiple simultaneous cameras, concurrent alerts, timing
-races) have not been tested, and no FPS/latency/accuracy numbers were
+run with one person/track in frame. No FPS/accuracy numbers were
 collected here -- that is Phase 6's job and still needs the team's
 physical mock-camera setup.
+
+## Phase 5 step 2 — Concurrency + a real timing bug found and fixed (2026-11-17)
+
+**Concurrency test:** 20 concurrent `POST /alerts` requests fired from
+20 threads (alternating `camera_id` 1/2) against the running backend.
+Result: 20/20 succeeded, 20 unique alert ids (no collisions), zero
+errors -- the alert-creation path is safe under concurrent load, no
+race condition or lost-write found.
+
+**Timing bug found:** every single HTTP call to the backend (GET or
+POST, concurrent or not) was taking a flat ~2.0s, regardless of what
+the endpoint did -- including `GET /cameras`, which does nothing slow.
+Root cause: `backend_client.py` (and the frontend's `.env`) pointed at
+`http://localhost:8000`; on this Windows machine, resolving `localhost`
+tries the IPv6 address (`::1`) first, which the backend isn't listening
+on (confirmed via `netstat`: only `127.0.0.1:8000`, no `::1:8000`), so
+every connection attempt waits out an IPv6 connect timeout (~2s) before
+falling back to IPv4. This is exactly the kind of cross-module timing
+bug Phase 5 step 2 exists to catch -- it only shows up once something
+is actually calling the running backend over the network, not in any
+single-module test.
+
+**Fix:** changed the default `--api-base` in `backend_client.py`, and
+`VITE_API_BASE_URL`/`VITE_WS_BASE_URL` in `frontend/.env` +
+`.env.example`, from `localhost` to `127.0.0.1`. Re-measured: 3
+sequential `POST /alerts` calls dropped from ~2.03-2.05s each to
+0.004-0.011s each (roughly 200-400x faster). This directly matters for
+the "processing latency" metric Phase 6 needs to measure -- without
+this fix, every AI-script-generated alert would have carried a ~2s
+artificial delay that has nothing to do with detection, tracking, or
+the database.
+
+**Note:** `frontend/.env` is gitignored (not committed); the running
+frontend dev server needs a restart to pick up the new value, which was
+left for the user to do since they have it open and were actively
+testing it themselves this session.
+
+**Verdict:** PASS for concurrency safety. Real bug found and fixed for
+latency.

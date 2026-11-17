@@ -428,8 +428,15 @@ all seven behaviors against the webcam, each one individually testable.
   Verified via the API afterward: incident status `resolved`,
   `acknowledged_by`/`resolved_by` both set to the operator's user id,
   zero manual DB edits. Zero console errors/exceptions captured.
-- [ ] Phase 6: Testing & Evaluation (FPS, latency, false-alert rate,
-  accuracy, camera-offline detection time, tamper-alert accuracy under
+- [x] Phase 5 step 2 (concurrency + timing bugs) — 20 concurrent
+  `POST /alerts` calls: 20/20 succeeded, no id collisions, no race
+  conditions. Found and fixed a real bug: every backend HTTP call was
+  taking a flat ~2.0s because `localhost` resolves to IPv6 first on
+  this machine and the backend only listens on IPv4 — fixed by using
+  `127.0.0.1` in `backend_client.py` and `frontend/.env(.example)`;
+  latency dropped to ~0.005-0.01s. See `/docs/evaluation-results.md`.
+- [ ] Phase 6: Testing & Evaluation (FPS, false-alert rate, accuracy,
+  camera-offline detection time, tamper-alert accuracy under
   controlled mock-environment conditions) — needs physical team/camera
   setup, not yet started
 - [ ] Documentation + demo environment setup
