@@ -316,3 +316,59 @@ was rejected at the handshake (HTTP 403, connection never accepted).
 **Verdict:** PASS — dashboard-side clients receive new alerts in real
 time without a page refresh, matching Section 12's requirement exactly;
 invalid tokens are rejected before the connection is accepted.
+
+## Frontend Dashboard (Phase 4)
+
+**Pages built on TailAdmin, wired to the real backend (not mock data):**
+`/signin` (real JWT login), `/cameras`, `/surveillance-alerts`,
+`/incidents`, `/people`. Auth state via a React context
+(`src/contexts/auth-context.tsx`) backed by `localStorage`; all routes
+under `AppLayout` are behind a `ProtectedRoute` that redirects to
+`/signin` when logged out. API calls isolated in `src/services/`
+(never inline `fetch` in components), live updates via
+`src/hooks/use-alerts-socket.ts`.
+
+**Test method:** headless Chrome driven directly over the Chrome
+DevTools Protocol (no browser-automation tool was available in this
+environment, so a raw CDP WebSocket client was scripted) against the
+real Vite dev server and FastAPI backend together.
+
+**Results:**
+- Sign-in form renders, accepts `admin`/`admin123`, redirects to `/`
+  on success. `ProtectedRoute` confirmed working (unauthenticated
+  requests for any dashboard route redirect to `/signin`).
+- `/cameras`: renders the real seeded cameras (`Test Camera 1`,
+  `Test Camera 2`) from the database, with status badges and an
+  admin-only "Add Camera" dialog.
+- `/surveillance-alerts`: renders real alerts created earlier via the
+  API (including one already linked to an incident, correctly shown as
+  "incident created" instead of the promote button).
+- `/incidents`: renders the real incident from earlier testing,
+  correctly showing status `resolved` and "Done" (no stray
+  acknowledge/resolve buttons on a closed incident).
+- `/people`: renders the real registered person ("Ahmed") with an
+  admin-only "Register Person" dialog.
+- Zero console errors or uncaught exceptions captured via CDP
+  (`Runtime.exceptionThrown` / `Runtime.consoleAPICalled`) during the
+  full login -> cameras -> alerts -> incidents -> people walkthrough.
+- `npm run build` (`tsc -b && vite build`) passes with zero type
+  errors across all new/modified files.
+
+**Known gaps (not yet done, explicitly deferred):**
+- Settings page (ROI/loitering threshold/tamper sensitivity configurable
+  from the UI) — not built yet; these are still argparse CLI flags on
+  the Phase 1 AI scripts, not persisted backend settings, so there is
+  nothing real yet for a settings UI to control.
+- Live WebSocket update *inside the browser* (new alert appearing
+  without a refresh while a human is looking at the page) was verified
+  at the backend level (see the WebSocket section above) but not
+  re-verified end-to-end through the actual rendered dashboard in this
+  pass -- the frontend hook (`use-alerts-socket.ts`) prepends/patches
+  state on `alert`/`camera_status`/`incident_update` messages the same
+  way the backend test proved those messages arrive, but a dedicated
+  two-browser-tab test is still worth doing before Phase 6.
+
+**Verdict:** PASS for what was built and tested -- a real, backend-wired
+dashboard a supervisor can click through (not a mockup), covering
+sections 1-5 of Phase 4's plan. Section 6 (Settings) is explicitly not
+done yet and is not being claimed as done.

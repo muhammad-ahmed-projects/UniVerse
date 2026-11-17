@@ -24,6 +24,10 @@
     "items": {
       "dashboard": "Dashboard",
       "ecommerceHome": "Ecommerce",
+      "surveillanceCameras": "Cameras",
+      "surveillanceAlerts": "Alerts",
+      "surveillanceIncidents": "Incidents",
+      "surveillancePeople": "Registered People",
       "analytics": "Analytics",
       "marketing": "Marketing",
       "crm": "CRM",

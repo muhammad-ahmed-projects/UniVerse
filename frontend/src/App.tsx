@@ -1,9 +1,14 @@
+import ProtectedRoute from "@/components/auth/protected-route";
 import AppLayout from "@/components/layout/app-layout";
 import CalendarPage from "@/pages/main/calendar";
 import EcommercePage from "@/pages/main/dashboard/ecommerce";
 import FormElementsPage from "@/pages/main/forms/form-elements";
 import { BlankPage, Error404Page } from "@/pages/main/pages";
 import ProfilePage from "@/pages/main/profile";
+import AlertsPage from "@/pages/main/surveillance/alerts";
+import CamerasPage from "@/pages/main/surveillance/cameras";
+import IncidentsPage from "@/pages/main/surveillance/incidents";
+import PeoplePage from "@/pages/main/surveillance/people";
 import BasicTablesPage from "@/pages/main/tables/basic-tables";
 import { AuthLayout, SignInPage, SignUpPage } from "@/pages/others/auth";
 import BarChartPage from "@/pages/others/charts/bar-chart";
@@ -21,8 +26,15 @@ export default function App() {
   return (
     <Routes>
       {/* Dashboard Layout */}
+      <Route element={<ProtectedRoute />}>
       <Route element={<AppLayout />}>
         <Route index element={<EcommercePage />} />
+
+        {/* Surveillance */}
+        <Route path="/cameras" element={<CamerasPage />} />
+        <Route path="/surveillance-alerts" element={<AlertsPage />} />
+        <Route path="/incidents" element={<IncidentsPage />} />
+        <Route path="/people" element={<PeoplePage />} />
 
         {/* Others Page */}
         <Route path="/profile" element={<ProfilePage />} />
@@ -46,6 +58,7 @@ export default function App() {
         {/* Charts */}
         <Route path="/line-chart" element={<LineChartPage />} />
         <Route path="/bar-chart" element={<BarChartPage />} />
+      </Route>
       </Route>
 
       {/* Auth Layout */}

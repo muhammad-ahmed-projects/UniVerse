@@ -8,7 +8,9 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { Link } from "react-router";
+import { useAuth } from "@/contexts";
+import { ApiError } from "@/services";
+import { Link, useNavigate } from "react-router";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
@@ -17,6 +19,9 @@ import { signInSchema, type SignInFormData } from "./schema";
 
 export default function SignInFormFields() {
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const {
     register,
@@ -26,15 +31,21 @@ export default function SignInFormFields() {
   } = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
-      email: "",
+      username: "",
       password: "",
       keepLoggedIn: false,
     },
     mode: "onTouched",
   });
 
-  const handleFormSubmit = async (_data: SignInFormData) => {
-    // handle submit action
+  const handleFormSubmit = async (data: SignInFormData) => {
+    setFormError(null);
+    try {
+      await login(data.username, data.password);
+      navigate("/");
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Login failed");
+    }
   };
 
   return (
@@ -43,17 +54,23 @@ export default function SignInFormFields() {
       className="space-y-5"
       noValidate
     >
-      <Field data-invalid={Boolean(errors.email)}>
+      {formError && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+          {formError}
+        </div>
+      )}
+
+      <Field data-invalid={Boolean(errors.username)}>
         <FieldLabel className="mb-1.5 block">
-          Email <span className="text-red-500">*</span>
+          Username <span className="text-red-500">*</span>
         </FieldLabel>
         <Input
-          {...register("email")}
-          type="email"
-          placeholder="info@gmail.com"
-          aria-invalid={errors.email ? "true" : undefined}
+          {...register("username")}
+          type="text"
+          placeholder="admin"
+          aria-invalid={errors.username ? "true" : undefined}
         />
-        <FieldError errors={[errors.email]} />
+        <FieldError errors={[errors.username]} />
       </Field>
 
       <Field data-invalid={Boolean(errors.password)}>

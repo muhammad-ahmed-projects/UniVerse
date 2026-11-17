@@ -10,6 +10,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import { useAuth } from "@/contexts";
 import { useChangeLocale, useLocale, useTranslations } from "@/i18n";
 import { getLanguage, languages } from "@/i18n/languages";
 import type { Locale } from "@/i18n/routing";
@@ -32,6 +33,13 @@ export default function UserDropdown() {
   const changeLocale = useChangeLocale();
   const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { user, logout } = useAuth();
+
+  const handleSignOut = () => {
+    setIsOpen(false);
+    logout();
+    navigate("/signin");
+  };
 
   const currentLang = getLanguage(locale);
   const CurrentFlagIcon = currentLang.FlagIcon;
@@ -48,7 +56,7 @@ export default function UserDropdown() {
           <img src="/images/user/owner.png" alt="User" className="size-11" />
         </span>
 
-        <span className="me-1 block text-sm font-medium">Musharof</span>
+        <span className="me-1 block text-sm font-medium">{user?.username ?? "..."}</span>
 
         <ChevronDownIcon
           className={cn(
@@ -61,10 +69,10 @@ export default function UserDropdown() {
       <DropdownMenuContent align="end" sideOffset={12} className="w-65 p-3">
         <div className="px-3 py-2">
           <span className="block text-sm font-medium text-gray-700 dark:text-gray-400">
-            Musharof Chowdhury
+            {user?.username}
           </span>
           <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-            randomuser@pimjo.com
+            {user?.email ?? user?.role}
           </span>
         </div>
 
@@ -147,7 +155,7 @@ export default function UserDropdown() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem variant="destructive" render={<Link to="/signin" />}>
+        <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
           <LogOutIcon />
           {t("signOut")}
         </DropdownMenuItem>

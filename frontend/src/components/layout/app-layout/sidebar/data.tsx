@@ -1,13 +1,16 @@
 import {
   BoxIcon,
   CalendarIcon,
+  CameraIcon,
   LayoutGridIcon,
   ListIcon,
+  OctagonAlertIcon,
   PageIcon,
   PieChartIcon,
   PluginIcon,
   TableIcon,
   UserCircleIcon,
+  UsersIcon,
 } from "@/icons";
 import type { NavItem } from "./types";
 
@@ -16,6 +19,26 @@ export const navItems: NavItem[] = [
     icon: <LayoutGridIcon className="size-6" />,
     key: "dashboard",
     subItems: [{ key: "ecommerceHome", path: "/" }],
+  },
+  {
+    icon: <CameraIcon className="size-6" />,
+    key: "surveillanceCameras",
+    path: "/cameras",
+  },
+  {
+    icon: <BoxIcon className="size-6" />,
+    key: "surveillanceAlerts",
+    path: "/surveillance-alerts",
+  },
+  {
+    icon: <OctagonAlertIcon className="size-6" />,
+    key: "surveillanceIncidents",
+    path: "/incidents",
+  },
+  {
+    icon: <UsersIcon className="size-6" />,
+    key: "surveillancePeople",
+    path: "/people",
   },
   {
     icon: <CalendarIcon className="size-6" />,
