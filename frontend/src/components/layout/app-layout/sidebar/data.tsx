@@ -5,6 +5,7 @@ import {
   LayoutGridIcon,
   OctagonAlertIcon,
   UsersIcon,
+  VideoIcon,
 } from "@/icons";
 import type { NavItem } from "./types";
 
@@ -13,6 +14,11 @@ export const navItems: NavItem[] = [
     icon: <LayoutGridIcon className="size-6" />,
     key: "dashboard",
     path: "/",
+  },
+  {
+    icon: <VideoIcon className="size-6" />,
+    key: "surveillanceLive",
+    path: "/live",
   },
   {
     icon: <CameraIcon className="size-6" />,

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { getCurrentUser, getStoredToken } from "@/services";
+import { type AlertImage, getCurrentUser, getStoredToken } from "@/services";
 
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL ?? "ws://127.0.0.1:8000";
+export const WS_BASE_URL =
+  import.meta.env.VITE_WS_BASE_URL ?? "ws://127.0.0.1:8000";
 // Exponential backoff: 1s, 2s, 4s ... capped at 30s, reset on a successful open.
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
@@ -17,7 +18,20 @@ export type SocketMessage =
       triggered_at: string;
     }
   | { type: "camera_status"; camera_id: number; status: string }
-  | { type: "incident_update"; id: number; status: string };
+  | { type: "incident_update"; id: number; status: string }
+  | {
+      type: "alert_image";
+      alert_id: number;
+      incident_id: number | null;
+      image: AlertImage;
+    }
+  | {
+      type: "person_seen";
+      person_id: number;
+      camera_id: number;
+      similarity: number;
+      seen_at: string;
+    };
 
 type Listener = (msg: SocketMessage) => void;
 

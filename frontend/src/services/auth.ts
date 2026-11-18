@@ -1,6 +1,7 @@
 import { API_BASE_URL, ApiError, apiClient, setToken } from "./api-client";
 
-export type UserRole = "admin" | "security_operator";
+/** ai_service is the AI scripts' service account, not meant for dashboard use. */
+export type UserRole = "admin" | "security_operator" | "ai_service";
 
 export interface CurrentUser {
   id: number;

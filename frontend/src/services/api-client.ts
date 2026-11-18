@@ -41,10 +41,16 @@ function formatDetail(detail: unknown): string | null {
   return null;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function send(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
   const token = getToken();
   const headers: Record<string, string> = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    // JSON bodies are pre-stringified; FormData sets its own multipart header.
+    ...(typeof options.body === "string"
+      ? { "Content-Type": "application/json" }
+      : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...((options.headers as Record<string, string>) ?? {}),
   };
@@ -66,7 +72,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(res.status, message);
   }
+  return res;
+}
 
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await send(path, options);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -89,6 +99,12 @@ export const apiClient = {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** Multipart upload (e.g. an image file under the "file" field). */
+  postForm: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: "POST", body: form }),
+  /** Authenticated binary download. An <img src> can't send the bearer token,
+   * so protected images are fetched as a Blob and shown via an object URL. */
+  getBlob: async (path: string) => (await send(path)).blob(),
 };
 
 export { API_BASE_URL };

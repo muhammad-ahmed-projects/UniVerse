@@ -33,6 +33,7 @@ const DEFAULTS: CameraSettingsInput = {
   tamper_covered_brightness_ratio: 0.4,
   tamper_covered_sharpness_ratio: 0.3,
   tamper_defocus_sharpness_ratio: 0.35,
+  face_match_threshold: 0.45,
 };
 
 function NumberField({
@@ -266,6 +267,27 @@ export default function SettingsPage() {
                   onChange={(v) => update("tamper_defocus_sharpness_ratio", v)}
                 />
               </div>
+            </div>
+
+            <div>
+              <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
+                Face Recognition
+              </h4>
+              <div className="max-w-xs">
+                <NumberField
+                  label="Match threshold"
+                  value={form.face_match_threshold}
+                  onChange={(v) => update("face_match_threshold", v)}
+                  step={0.01}
+                  min={0.2}
+                  max={0.9}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-gray-400">
+                Similarity (0.20-0.90) a face needs to count as a registered
+                person. Higher means fewer wrong matches but more "Unknown"
+                labels. 0.45 is a good start.
+              </p>
             </div>
 
             {!isReadOnly && (

@@ -1,6 +1,7 @@
 import { ComponentCard } from "@/components/shared/component-card";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { PageMeta } from "@/components/shared/page-meta";
+import { EvidenceThumbnails } from "@/components/surveillance/evidence-gallery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -49,15 +50,25 @@ export default function AlertsPage() {
           alert_type: msg.alert_type,
           priority: msg.priority as Alert["priority"],
           message: msg.message,
-          evidence_path: null,
           extra_data: null,
           incident_id: null,
           triggered_at: msg.triggered_at,
+          images: [], // evidence arrives right after, as alert_image messages
         };
         // Dedupe: a reconnect can race with the initial list load.
         if (prev?.some((a) => a.id === newAlert.id)) return prev;
         return prev ? [newAlert, ...prev] : [newAlert];
       });
+    } else if (msg.type === "alert_image") {
+      setAlerts(
+        (prev) =>
+          prev?.map((a) =>
+            a.id === msg.alert_id &&
+            !a.images.some((img) => img.id === msg.image.id)
+              ? { ...a, images: [...a.images, msg.image] }
+              : a,
+          ) ?? prev,
+      );
     } else if (msg.type === "incident_update") {
       // Another operator may have promoted an alert; refresh link state.
       load();
@@ -160,6 +171,12 @@ export default function AlertsPage() {
                       isHeader
                       className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
                     >
+                      Evidence
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
                       Action
                     </TableCell>
                   </TableRow>
@@ -181,6 +198,12 @@ export default function AlertsPage() {
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {alert.message}
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <EvidenceThumbnails
+                          images={alert.images}
+                          title={`${alert.alert_type} · camera #${alert.camera_id}`}
+                        />
                       </TableCell>
                       <TableCell className="px-5 py-4">
                         {alert.incident_id ? (

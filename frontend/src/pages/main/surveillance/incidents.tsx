@@ -1,6 +1,7 @@
 import { ComponentCard } from "@/components/shared/component-card";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { PageMeta } from "@/components/shared/page-meta";
+import { EvidenceThumbnails } from "@/components/surveillance/evidence-gallery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -44,6 +45,17 @@ export default function IncidentsPage() {
   useAlertsSocket((msg) => {
     if (msg.type === "incident_update") {
       load();
+    } else if (msg.type === "alert_image" && msg.incident_id !== null) {
+      // Evidence can still arrive for an alert just after it was promoted.
+      setIncidents(
+        (prev) =>
+          prev?.map((i) =>
+            i.id === msg.incident_id &&
+            !i.images.some((img) => img.id === msg.image.id)
+              ? { ...i, images: [...i.images, msg.image] }
+              : i,
+          ) ?? prev,
+      );
     }
   });
 
@@ -135,6 +147,12 @@ export default function IncidentsPage() {
                       isHeader
                       className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
                     >
+                      Evidence
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
                       Created
                     </TableCell>
                     <TableCell
@@ -159,6 +177,12 @@ export default function IncidentsPage() {
                       </TableCell>
                       <TableCell className="px-5 py-4">
                         <StatusBadge status={incident.status} />
+                      </TableCell>
+                      <TableCell className="px-5 py-4">
+                        <EvidenceThumbnails
+                          images={incident.images}
+                          title={`Incident #${incident.id} · ${incident.title}`}
+                        />
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {new Date(incident.created_at).toLocaleString()}

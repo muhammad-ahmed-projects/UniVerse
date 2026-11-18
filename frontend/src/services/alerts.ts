@@ -1,16 +1,26 @@
 import { apiClient } from "./api-client";
 
+/** Evidence snapshot metadata; the JPEG itself is at alertImagePath(image). */
+export interface AlertImage {
+  id: number;
+  alert_id: number;
+  captured_at: string;
+}
+
 export interface Alert {
   id: number;
   camera_id: number;
   alert_type: string;
   priority: "low" | "medium" | "high";
   message: string;
-  evidence_path: string | null;
   extra_data: Record<string, unknown> | null;
   incident_id: number | null;
   triggered_at: string;
+  images: AlertImage[];
 }
+
+export const alertImagePath = (image: AlertImage) =>
+  `/alerts/${image.alert_id}/images/${image.id}`;
 
 export const alertsApi = {
   list: (params?: {

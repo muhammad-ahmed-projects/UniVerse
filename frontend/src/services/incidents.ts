@@ -1,3 +1,4 @@
+import type { AlertImage } from "./alerts";
 import { apiClient } from "./api-client";
 
 export type IncidentStatus = "open" | "acknowledged" | "resolved";
@@ -15,6 +16,8 @@ export interface Incident {
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Evidence of the alert(s) this incident was promoted from. */
+  images: AlertImage[];
 }
 
 export interface IncidentCreateInput {

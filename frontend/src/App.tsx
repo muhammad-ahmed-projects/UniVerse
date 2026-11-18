@@ -4,6 +4,7 @@ import { Error404Page } from "@/pages/main/pages";
 import AlertsPage from "@/pages/main/surveillance/alerts";
 import CamerasPage from "@/pages/main/surveillance/cameras";
 import IncidentsPage from "@/pages/main/surveillance/incidents";
+import LiveViewPage from "@/pages/main/surveillance/live";
 import OverviewPage from "@/pages/main/surveillance/overview";
 import PeoplePage from "@/pages/main/surveillance/people";
 import SettingsPage from "@/pages/main/surveillance/settings";
@@ -18,6 +19,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<OverviewPage />} />
+          <Route path="/live" element={<LiveViewPage />} />
           <Route path="/cameras" element={<CamerasPage />} />
           <Route path="/surveillance-alerts" element={<AlertsPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />

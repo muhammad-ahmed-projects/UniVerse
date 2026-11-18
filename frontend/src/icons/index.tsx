@@ -148,6 +148,7 @@ export { UserDollarIcon } from "./user-dollar";
 export { UserIcon } from "./user";
 export { UsersIcon as GroupIcon, UsersIcon } from "./users";
 export { VerticalDotsIcon } from "./vertical-dots";
+export { VideoIcon } from "./video";
 export { VisaIcon } from "./visa";
 export { WhatsappIcon } from "./whatsapp";
 export { XAiIcon } from "./x-ai";
