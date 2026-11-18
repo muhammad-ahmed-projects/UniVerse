@@ -182,7 +182,7 @@ export default function SettingsPage() {
           </div>
         ) : !selectedCameraId ? (
           <p className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-            No cameras registered yet â€” add one from the Cameras page first.
+            No cameras registered yet — add one from the Cameras page first.
           </p>
         ) : (
           <fieldset

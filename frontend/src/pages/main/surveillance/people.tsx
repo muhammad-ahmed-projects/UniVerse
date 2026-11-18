@@ -201,7 +201,7 @@ export default function PeoplePage() {
                         {person.name}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {person.notes ?? "â€”"}
+                        {person.notes ?? "—"}
                       </TableCell>
                       <TableCell className="px-5 py-4">
                         <Badge color={person.is_active ? "success" : "gray"}>

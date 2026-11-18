@@ -176,6 +176,12 @@ export default function CamerasPage() {
                       isHeader
                       className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
                     >
+                      ID
+                    </TableCell>
+                    <TableCell
+                      isHeader
+                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
+                    >
                       Name
                     </TableCell>
                     <TableCell
@@ -207,11 +213,15 @@ export default function CamerasPage() {
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {cameras.map((camera) => (
                     <TableRow key={camera.id}>
+                      {/* AI scripts take this as --camera-id. */}
+                      <TableCell className="font-mono px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {camera.id}
+                      </TableCell>
                       <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
                         {camera.name}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {camera.location ?? "â€”"}
+                        {camera.location ?? "—"}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {camera.stream_source}
@@ -222,7 +232,7 @@ export default function CamerasPage() {
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {camera.last_seen_at
                           ? new Date(camera.last_seen_at).toLocaleString()
-                          : "â€”"}
+                          : "—"}
                       </TableCell>
                     </TableRow>
                   ))}
