@@ -421,6 +421,14 @@ all seven behaviors against the webcam, each one individually testable.
     (Phase 4 step 5): consent checkbox, face photos by upload or browser
     camera, server-side InsightFace embedding + thumbnail, photo count,
     live "last seen" camera/time from face sightings
+  - [x] User management + profile + working header search (2026-11-18)
+    — admin Users page (add/edit role/deactivate/reset password/delete,
+    self-lockout and audit-trail guards), Profile page with own password
+    change, password changes revoke older tokens (`iat` vs
+    `users.password_changed_at`, migration `c4d2e8f1a9b3`); header search
+    over pages/cameras/people/alerts/incidents; language switcher and
+    browser-language detection removed (English-only). Verified: pytest
+    68/68, headless-Chrome E2E 34/34
   - [x] Camera monitoring from the dashboard + camera edit/delete
     (2026-11-18) — admin opens Monitoring on a camera (Cameras page or
     Live View tile), picks analyses (one per USB webcam), and the API
@@ -495,7 +503,7 @@ all seven behaviors against the webcam, each one individually testable.
   routes, review-flow races, resolve-before-acknowledge, unbounded
   lists, dead `/profile` links, WS retry loop on bad tokens; plus dead
   TailAdmin code/branding). Added a backend pytest suite (28/28 pass at
-  the time, 59 now;
+  the time, 68 now;
   separate `universe_test` DB) and ruff config; 28/28 headless-browser
   E2E checks pass. Details in `/docs/evaluation-results.md`. Run
   `python -m pytest` (backend) and `npm run build && npm run lint`

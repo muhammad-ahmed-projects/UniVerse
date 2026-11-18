@@ -20,9 +20,25 @@ are admin-only, and embeddings are admin or `ai_service` only.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/auth/register` | admin | Create a new user account. No public self-registration. |
+| POST | `/auth/register` | admin | Create a new user account (same as `POST /users`). No public self-registration. |
 | POST | `/auth/login` | none | Form-encoded (`username`, `password`), not JSON. Returns a JWT. |
 | GET | `/auth/me` | any | Returns the current user. |
+| POST | `/auth/change-password` | any | `{current_password, new_password}` (8-72 chars). 400 if the current password is wrong or the new one is the same. Signs out the account's other sessions and returns a fresh token for this one. |
+
+## Users (admin only)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/users` | All accounts: `{id, username, email, role, is_active, created_at}`. |
+| POST | `/users` | `{username, email?, password, role}`. Username: 3-50 chars of letters, digits, `._-`. 400 if the username or email is taken. |
+| PATCH | `/users/{id}` | Any of `{email, role, is_active}`. A deactivated account can't sign in, and its open sessions stop working. |
+| POST | `/users/{id}/password` | `{new_password}`. Signs out every session of that account. 204. |
+| DELETE | `/users/{id}` | 204. 409 if the account acknowledged/resolved incidents (deactivate it instead, so the review history keeps who did it). |
+
+Guards: an admin can't change their own role, deactivate or delete
+themselves, and the last active admin can't be removed. Tokens carry
+`iat`; any token issued before an account's last password change or
+reset is rejected (HTTP 401, WebSocket 1008).
 
 ```sh
 curl -X POST http://127.0.0.1:8000/auth/login \

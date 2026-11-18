@@ -825,3 +825,46 @@ guide now says to clone into a short path such as `D:\UniVerse`, shows
 how to enable long paths, and has a troubleshooting row for the error.
 It also covers machines where the `py` launcher isn't on PATH (found on
 this machine).
+
+## User management, profile, header search (2026-11-18)
+
+The dashboard had no way to manage accounts or change a password, the
+header search box did nothing (TailAdmin placeholder), and the user menu
+offered a language switch that only half-translated the UI.
+
+- **Users page** (admin only; sidebar and menu entry hidden for others,
+  `/users` redirects non-admins): add, edit email/role/active, reset
+  password, delete. An admin can't demote, deactivate or delete
+  themselves. An account that reviewed incidents can't be deleted,
+  only deactivated, which keeps the review trail.
+- **Profile page** (everyone): account details and a password change.
+- **Sessions:** changing or resetting a password now logs out that
+  account's other sessions. Tokens carry a sub-second `iat`, checked
+  against the new `users.password_changed_at` (migration `c4d2e8f1a9b3`)
+  on every request and WebSocket handshake. Before this, a reset
+  password left old tokens valid for up to 8 hours.
+- **Header search:** pages, cameras, people, recent alerts and incidents,
+  with Ctrl+K (Cmd+K on Mac), arrow keys, Enter and Esc. A result opens
+  its page with the matching row highlighted.
+- **English only:** the language switch was removed. Browser-language
+  detection was also removed: a German or Arabic browser used to get a
+  half-translated or right-to-left dashboard. The unused
+  `i18next-browser-languagedetector` dependency was dropped.
+
+**Tests:** backend pytest 68/68 (9 new: create/validate, admin-only,
+edit and deactivate, self-lockout guards, password reset logs out old
+sessions incl. WebSocket, own password change, delete with
+audit-trail guard). Headless Chrome E2E 34/34, no console errors:
+- the UI stays English and left-to-right even with a saved Arabic choice;
+- search: Ctrl+K, camera and page results, Enter opens the highlighted
+  camera row, Esc closes, a no-results message;
+- the menu has no language entry;
+- users: add, sign in, deactivate (sign-in refused), own role locked,
+  mismatched passwords blocked, reset (old password refused), delete;
+- an operator has no Users entry, is redirected away from `/users`,
+  changes their own password, stays signed in, and the old password
+  stops working.
+
+Two UI bugs were found and fixed during the run. A search typed right
+after Esc closed itself (a pending blur timer). `TableRow` didn't forward
+`id`, which row highlighting needs.

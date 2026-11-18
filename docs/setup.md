@@ -516,9 +516,11 @@ Postman, or use the `curl` examples in
   excludes them. Don't force-add them.
 - The seed passwords (`admin123`, `operator123`, `ai_service123`) are
   public in this repository. Use them only on your own PC. For the demo,
-  create accounts with strong passwords through `POST /auth/register`
-  (admin only, see [`api-reference.md`](api-reference.md)); the AI scripts
-  need one with the `ai_service` role.
+  sign in as admin, open **Users**, create accounts with strong passwords
+  (the AI scripts need one with the **AI service** role, set in
+  `backend\.env`), and reset or deactivate the seed accounts. Everyone can
+  change their own password on the **Profile** page (user menu > My
+  profile).
 - Get a person's consent before you register their face.
 - After a change that someone else will pull, run the checks in
   [Check that everything works](#check-that-everything-works).
