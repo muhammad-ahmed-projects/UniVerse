@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toast-manager";
 import {
   ApiError,
-  MIN_PASSWORD_LENGTH,
+  isStrongPassword,
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
   type User,
@@ -30,6 +30,7 @@ import {
   usersApi,
 } from "@/services";
 import { useState } from "react";
+import { PasswordChecklist } from "./password-checklist";
 
 const ROLES = Object.keys(ROLE_LABELS) as UserRole[];
 
@@ -88,11 +89,15 @@ export function UserFormDialog({
   );
   const [isActive, setIsActive] = useState(editing?.is_active ?? true);
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const mismatch = confirm.length > 0 && confirm !== password;
 
   const canSave = editing
     ? true
-    : username.trim().length >= 3 && password.length >= MIN_PASSWORD_LENGTH;
+    : username.trim().length >= 3 &&
+      isStrongPassword(password) &&
+      password === confirm;
 
   const save = async () => {
     setIsSaving(true);
@@ -155,7 +160,7 @@ export function UserFormDialog({
               <Input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. aiman"
+                placeholder="e.g. ahmed"
                 autoComplete="off"
                 maxLength={50}
               />
@@ -184,10 +189,27 @@ export function UserFormDialog({
                 autoComplete="new-password"
                 maxLength={72}
               />
+              <PasswordChecklist password={password} />
               <p className="text-xs text-gray-400">
-                At least {MIN_PASSWORD_LENGTH} characters. Share it with the
-                person privately; they can change it on their Profile page.
+                Share it with the person privately; they can change it on their
+                Profile page.
               </p>
+            </Field>
+          )}
+          {!editing && (
+            <Field>
+              <FieldLabel>Confirm password</FieldLabel>
+              <Input
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                autoComplete="new-password"
+                maxLength={72}
+                aria-invalid={mismatch || undefined}
+              />
+              {mismatch && (
+                <p className="text-xs text-red-500">Passwords don't match.</p>
+              )}
             </Field>
           )}
           {editing && (
@@ -278,12 +300,10 @@ export function ResetPasswordDialog({
               autoComplete="new-password"
               maxLength={72}
             />
-            <p className="text-xs text-gray-400">
-              At least {MIN_PASSWORD_LENGTH} characters.
-            </p>
+            <PasswordChecklist password={password} />
           </Field>
           <Field>
-            <FieldLabel>Repeat new password</FieldLabel>
+            <FieldLabel>Confirm new password</FieldLabel>
             <Input
               type="password"
               value={confirm}
@@ -302,9 +322,7 @@ export function ResetPasswordDialog({
           <Button
             onClick={() => void save()}
             disabled={
-              isSaving ||
-              password.length < MIN_PASSWORD_LENGTH ||
-              confirm !== password
+              isSaving || !isStrongPassword(password) || confirm !== password
             }
           >
             {isSaving ? <Spinner /> : "Reset password"}

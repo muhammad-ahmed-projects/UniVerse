@@ -15,7 +15,7 @@ def _user_id(username: str) -> int:
 def _create(client: TestClient, admin_token: str, username: str = "guard1", role: str = "security_operator"):
     return client.post(
         "/users",
-        json={"username": username, "email": f"{username}@example.com", "password": "guard-pass-1", "role": role},
+        json={"username": username, "email": f"{username}@example.com", "password": "Guard-pass-1", "role": role},
         headers=auth(admin_token),
     )
 
@@ -27,8 +27,8 @@ def test_admin_lists_and_creates_users(client: TestClient, admin_token: str) -> 
     created = _create(client, admin_token)
     assert created.status_code == 201, created.text
     assert created.json()["role"] == "security_operator"
-    assert "hashed_password" not in created.json() and "guard-pass-1" not in created.text
-    assert client.post("/auth/login", data={"username": "guard1", "password": "guard-pass-1"}).status_code == 200
+    assert "hashed_password" not in created.json() and "Guard-pass-1" not in created.text
+    assert client.post("/auth/login", data={"username": "guard1", "password": "Guard-pass-1"}).status_code == 200
 
 
 def test_create_validation(client: TestClient, admin_token: str) -> None:
@@ -36,14 +36,14 @@ def test_create_validation(client: TestClient, admin_token: str) -> None:
     assert _create(client, admin_token).status_code == 400  # duplicate username
     other = client.post(
         "/users",
-        json={"username": "guard2", "email": "guard1@example.com", "password": "guard-pass-1"},
+        json={"username": "guard2", "email": "guard1@example.com", "password": "Guard-pass-1"},
         headers=auth(admin_token),
     )
     assert other.status_code == 400 and "already in use" in other.json()["detail"]
     for body in (
-        {"username": "has space", "password": "guard-pass-1"},
+        {"username": "has space", "password": "Guard-pass-1"},
         {"username": "ok_name", "password": "short"},
-        {"username": "ok_name", "password": "guard-pass-1", "role": "superuser"},
+        {"username": "ok_name", "password": "Guard-pass-1", "role": "superuser"},
     ):
         assert client.post("/users", json=body, headers=auth(admin_token)).status_code == 422
 
@@ -55,7 +55,7 @@ def test_user_management_is_admin_only(client: TestClient, admin_token: str, ope
     assert _create(client, operator_token).status_code == 403
     assert client.patch(f"/users/{admin_id}", json={"is_active": False}, headers=h).status_code == 403
     assert (
-        client.post(f"/users/{admin_id}/password", json={"new_password": "hacked-pass"}, headers=h).status_code == 403
+        client.post(f"/users/{admin_id}/password", json={"new_password": "Hacked-pass-1"}, headers=h).status_code == 403
     )
     assert client.delete(f"/users/{admin_id}", headers=h).status_code == 403
 
@@ -87,20 +87,22 @@ def test_admin_cannot_lock_themselves_out(client: TestClient, admin_token: str) 
 
 def test_reset_password_logs_out_old_sessions(client: TestClient, admin_token: str, operator_token: str) -> None:
     op_id = _user_id(OPERATOR[0])
-    resp = client.post(f"/users/{op_id}/password", json={"new_password": "brand-new-pass"}, headers=auth(admin_token))
+    resp = client.post(f"/users/{op_id}/password", json={"new_password": "Brand-new-pass-1"}, headers=auth(admin_token))
     assert resp.status_code == 204
     assert client.get("/auth/me", headers=auth(operator_token)).status_code == 401
     with pytest.raises(WebSocketDisconnect), client.websocket_connect(f"/ws/alerts?token={operator_token}") as ws:
         ws.receive_json()
     assert client.post("/auth/login", data={"username": OPERATOR[0], "password": OPERATOR[1]}).status_code == 401
-    new = client.post("/auth/login", data={"username": OPERATOR[0], "password": "brand-new-pass"})
+    new = client.post("/auth/login", data={"username": OPERATOR[0], "password": "Brand-new-pass-1"})
     assert new.status_code == 200
     assert client.get("/auth/me", headers=auth(new.json()["access_token"])).status_code == 200
 
 
 def test_change_own_password(client: TestClient, operator_token: str) -> None:
     h = auth(operator_token)
-    wrong = client.post("/auth/change-password", json={"current_password": "nope", "new_password": "x" * 10}, headers=h)
+    wrong = client.post(
+        "/auth/change-password", json={"current_password": "nope", "new_password": "Xx-12345678"}, headers=h
+    )
     assert wrong.status_code == 400 and "incorrect" in wrong.json()["detail"]
     same = client.post(
         "/auth/change-password", json={"current_password": OPERATOR[1], "new_password": OPERATOR[1]}, headers=h
@@ -112,13 +114,13 @@ def test_change_own_password(client: TestClient, operator_token: str) -> None:
     assert short.status_code == 422
 
     ok = client.post(
-        "/auth/change-password", json={"current_password": OPERATOR[1], "new_password": "my-new-secret"}, headers=h
+        "/auth/change-password", json={"current_password": OPERATOR[1], "new_password": "My-new-secret-1"}, headers=h
     )
     assert ok.status_code == 200
     # This session continues with the returned token; the old token is dead.
     assert client.get("/auth/me", headers=auth(ok.json()["access_token"])).status_code == 200
     assert client.get("/auth/me", headers=h).status_code == 401
-    assert client.post("/auth/login", data={"username": OPERATOR[0], "password": "my-new-secret"}).status_code == 200
+    assert client.post("/auth/login", data={"username": OPERATOR[0], "password": "My-new-secret-1"}).status_code == 200
 
 
 def test_delete_user(client: TestClient, admin_token: str, seeded: dict[str, int]) -> None:
@@ -142,3 +144,32 @@ def test_tokens_from_before_this_change_still_work(client: TestClient, seeded: d
     # Accounts that never changed their password keep working with any valid token.
     token = _token(client, ADMIN)
     assert client.get("/auth/me", headers=auth(token)).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("password", "missing"),
+    [
+        ("alllowercase1!", "uppercase"),
+        ("ALLUPPERCASE1!", "lowercase"),
+        ("NoNumbers!!", "number"),
+        ("NoSpecial123", "special character"),
+        ("Sh0rt!", "at least 8"),
+    ],
+)
+def test_weak_passwords_are_rejected_everywhere(
+    client: TestClient, admin_token: str, operator_token: str, password: str, missing: str
+) -> None:
+    op_id = _user_id(OPERATOR[0])
+    attempts = [
+        client.post("/users", json={"username": "weakling", "password": password}, headers=auth(admin_token)),
+        client.post("/auth/signup", json={"username": "weakling2", "password": password}),
+        client.post(f"/users/{op_id}/password", json={"new_password": password}, headers=auth(admin_token)),
+        client.post(
+            "/auth/change-password",
+            json={"current_password": OPERATOR[1], "new_password": password},
+            headers=auth(operator_token),
+        ),
+    ]
+    for resp in attempts:
+        assert resp.status_code == 422, resp.text
+        assert missing in resp.text

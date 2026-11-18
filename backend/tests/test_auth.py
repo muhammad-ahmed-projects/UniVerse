@@ -31,7 +31,7 @@ def test_protected_route_requires_token(client: TestClient, seeded: dict[str, in
 
 
 def test_register_is_admin_only(client: TestClient, admin_token: str, operator_token: str) -> None:
-    body = {"username": "newop", "password": "long-enough-pw", "role": "security_operator"}
+    body = {"username": "newop", "password": "Long-enough-pw1", "role": "security_operator"}
     assert client.post("/auth/register", json=body).status_code == 401
     assert client.post("/auth/register", json=body, headers=auth(operator_token)).status_code == 403
 
@@ -40,13 +40,13 @@ def test_register_is_admin_only(client: TestClient, admin_token: str, operator_t
     assert resp.json()["role"] == "security_operator"
 
     # The new account can actually log in.
-    login = client.post("/auth/login", data={"username": "newop", "password": "long-enough-pw"})
+    login = client.post("/auth/login", data={"username": "newop", "password": "Long-enough-pw1"})
     assert login.status_code == 200
 
 
 def test_register_rejects_duplicate_and_short_password(client: TestClient, admin_token: str) -> None:
     dup = client.post(
-        "/auth/register", json={"username": ADMIN[0], "password": "long-enough-pw"}, headers=auth(admin_token)
+        "/auth/register", json={"username": ADMIN[0], "password": "Long-enough-pw1"}, headers=auth(admin_token)
     )
     assert dup.status_code == 400
 
@@ -59,9 +59,9 @@ def test_password_is_stored_hashed(client: TestClient, admin_token: str) -> None
     from app.models import User
 
     client.post(
-        "/auth/register", json={"username": "hashcheck", "password": "plain-text-pw"}, headers=auth(admin_token)
+        "/auth/register", json={"username": "hashcheck", "password": "Plain-text-pw1"}, headers=auth(admin_token)
     )
     with SessionLocal() as db:
         stored = db.query(User).filter_by(username="hashcheck").one().hashed_password
-    assert stored != "plain-text-pw"
+    assert stored != "Plain-text-pw1"
     assert stored.startswith("$2b$")

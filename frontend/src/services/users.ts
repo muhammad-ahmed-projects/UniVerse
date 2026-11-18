@@ -6,6 +6,27 @@ export type User = CurrentUser;
 /** Matches the API's rule (bcrypt uses at most 72 bytes). */
 export const MIN_PASSWORD_LENGTH = 8;
 
+/** Strong-password rules, the same as backend/app/schemas/auth.py. */
+export const PASSWORD_RULES: {
+  label: string;
+  test: (pw: string) => boolean;
+}[] = [
+  {
+    label: `At least ${MIN_PASSWORD_LENGTH} characters`,
+    test: (pw) => pw.length >= MIN_PASSWORD_LENGTH,
+  },
+  { label: "An uppercase letter (A-Z)", test: (pw) => /[A-Z]/.test(pw) },
+  { label: "A lowercase letter (a-z)", test: (pw) => /[a-z]/.test(pw) },
+  { label: "A number (0-9)", test: (pw) => /[0-9]/.test(pw) },
+  {
+    label: "A special character (e.g. ! @ # $)",
+    test: (pw) => /[^A-Za-z0-9]/.test(pw),
+  },
+];
+
+export const isStrongPassword = (pw: string) =>
+  PASSWORD_RULES.every((rule) => rule.test(pw));
+
 export interface UserCreateInput {
   username: string;
   email?: string;

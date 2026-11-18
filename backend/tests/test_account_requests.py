@@ -6,7 +6,7 @@ from app.api import auth as auth_api
 from tests.conftest import OPERATOR, auth
 
 
-def _signup(client: TestClient, username: str = "newbie", password: str = "newbie-pass-1"):
+def _signup(client: TestClient, username: str = "newbie", password: str = "Newbie-pass-1"):
     return client.post(
         "/auth/signup", json={"username": username, "email": f"{username}@example.com", "password": password}
     )
@@ -23,10 +23,10 @@ def test_signup_is_pending_until_approved(client: TestClient, admin_token: str, 
     assert resp.status_code == 202
     assert "admin approves" in resp.json()["detail"]
 
-    login = client.post("/auth/login", data={"username": "newbie", "password": "newbie-pass-1"})
+    login = client.post("/auth/login", data={"username": "newbie", "password": "Newbie-pass-1"})
     assert login.status_code == 403 and "waiting for an admin" in login.json()["detail"]
     # The pending state isn't revealed to someone with the wrong password.
-    assert client.post("/auth/login", data={"username": "newbie", "password": "wrong-pass-1"}).status_code == 401
+    assert client.post("/auth/login", data={"username": "newbie", "password": "Wrong-pass-1"}).status_code == 401
 
     pending = _user(client, admin_token, "newbie")
     assert (pending["is_pending"], pending["is_active"]) == (True, False)
@@ -42,7 +42,7 @@ def test_signup_is_pending_until_approved(client: TestClient, admin_token: str, 
     )
     assert approved.status_code == 200
     assert (approved.json()["is_pending"], approved.json()["is_active"]) == (False, True)
-    assert client.post("/auth/login", data={"username": "newbie", "password": "newbie-pass-1"}).status_code == 200
+    assert client.post("/auth/login", data={"username": "newbie", "password": "Newbie-pass-1"}).status_code == 200
     again = client.post(f"/users/{pending['id']}/approve", json={}, headers=auth(admin_token))
     assert again.status_code == 400
 
@@ -52,10 +52,10 @@ def test_reject_and_signup_validation(client: TestClient, admin_token: str) -> N
     assert _signup(client).status_code == 400  # username taken
     assert _signup(client, OPERATOR[0]).status_code == 400
     for body in (
-        {"username": "x", "password": "long-enough-1"},
-        {"username": "has space", "password": "long-enough-1"},
+        {"username": "x", "password": "Long-enough-1"},
+        {"username": "has space", "password": "Long-enough-1"},
         {"username": "okname", "password": "short"},
-        {"username": "okname", "password": "long-enough-1", "role": "admin", "email": "not-an-email"},
+        {"username": "okname", "password": "Long-enough-1", "role": "admin", "email": "not-an-email"},
     ):
         assert client.post("/auth/signup", json=body).status_code == 422
 
@@ -64,11 +64,11 @@ def test_reject_and_signup_validation(client: TestClient, admin_token: str) -> N
     edit = client.patch(f"/users/{pending['id']}", json={"is_active": True}, headers=auth(admin_token))
     assert edit.status_code == 400
     assert client.delete(f"/users/{pending['id']}", headers=auth(admin_token)).status_code == 204
-    assert client.post("/auth/login", data={"username": "newbie", "password": "newbie-pass-1"}).status_code == 401
+    assert client.post("/auth/login", data={"username": "newbie", "password": "Newbie-pass-1"}).status_code == 401
 
 
 def test_signup_role_cannot_be_chosen_by_the_requester(client: TestClient, admin_token: str) -> None:
-    body = {"username": "sneaky", "password": "sneaky-pass-1", "role": "admin"}
+    body = {"username": "sneaky", "password": "Sneaky-pass-1", "role": "admin"}
     assert client.post("/auth/signup", json=body).status_code == 202
     assert _user(client, admin_token, "sneaky")["role"] == "security_operator"
 
@@ -98,9 +98,9 @@ def test_forgot_password_request_flow(client: TestClient, admin_token: str, oper
     assert client.get("/users/requests", headers=auth(admin_token)).json()["password_resets"] == 1
 
     # The admin's reset closes the request; the old password stops working.
-    client.post(f"/users/{op['id']}/password", json={"new_password": "reset-by-admin-1"}, headers=auth(admin_token))
+    client.post(f"/users/{op['id']}/password", json={"new_password": "Reset-by-admin-1"}, headers=auth(admin_token))
     assert _user(client, admin_token, OPERATOR[0])["password_reset_requested_at"] is None
-    assert client.post("/auth/login", data={"username": OPERATOR[0], "password": "reset-by-admin-1"}).status_code == 200
+    assert client.post("/auth/login", data={"username": OPERATOR[0], "password": "Reset-by-admin-1"}).status_code == 200
     assert client.get("/users/requests", headers=auth(operator_token)).status_code in (401, 403)
 
 

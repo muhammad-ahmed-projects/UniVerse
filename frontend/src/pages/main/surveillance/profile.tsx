@@ -7,10 +7,11 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/toast-manager";
+import { PasswordChecklist } from "@/components/users/password-checklist";
 import { useAuth } from "@/contexts";
 import {
   ApiError,
-  MIN_PASSWORD_LENGTH,
+  isStrongPassword,
   ROLE_DESCRIPTIONS,
   ROLE_LABELS,
   changeOwnPassword,
@@ -94,7 +95,7 @@ export default function ProfilePage() {
 
         <ComponentCard
           title="Change password"
-          description="Use at least 8 characters. Every other place you're signed in is signed out."
+          description="Choose a strong password. Every other place you're signed in is signed out."
         >
           <form
             className="max-w-sm space-y-4"
@@ -122,9 +123,10 @@ export default function ProfilePage() {
                 autoComplete="new-password"
                 maxLength={72}
               />
+              <PasswordChecklist password={next} />
             </Field>
             <Field>
-              <FieldLabel>Repeat new password</FieldLabel>
+              <FieldLabel>Confirm new password</FieldLabel>
               <Input
                 type="password"
                 value={confirm}
@@ -142,7 +144,7 @@ export default function ProfilePage() {
               disabled={
                 isSaving ||
                 !current ||
-                next.length < MIN_PASSWORD_LENGTH ||
+                !isStrongPassword(next) ||
                 next !== confirm
               }
             >

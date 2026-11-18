@@ -1,11 +1,30 @@
+import re
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.user import UserRole
 
-# bcrypt only uses the first 72 bytes of a password.
-Password = Field(min_length=8, max_length=72)
+# Same rules as the dashboard's checklist (frontend/src/services/users.ts).
+PASSWORD_RULES: list[tuple[str, str]] = [
+    (r"[A-Z]", "an uppercase letter (A-Z)"),
+    (r"[a-z]", "a lowercase letter (a-z)"),
+    (r"[0-9]", "a number (0-9)"),
+    (r"[^A-Za-z0-9]", "a special character (e.g. ! @ # $)"),
+]
+
+
+def _check_strength(value: str) -> str:
+    missing = [label for pattern, label in PASSWORD_RULES if not re.search(pattern, value)]
+    if missing:
+        raise ValueError("Password needs " + ", ".join(missing))
+    return value
+
+
+# Applies whenever a password is set (create, sign-up, reset, change); signing
+# in with an older password is unaffected. bcrypt uses only the first 72 bytes.
+Password = Annotated[str, Field(min_length=8, max_length=72), AfterValidator(_check_strength)]
 
 
 Username = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
@@ -14,7 +33,7 @@ Username = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
 class UserRegister(BaseModel):
     username: str = Username
     email: EmailStr | None = None
-    password: str = Password
+    password: Password
     role: UserRole = UserRole.SECURITY_OPERATOR
 
 
@@ -23,7 +42,7 @@ class SignupRequest(BaseModel):
 
     username: str = Username
     email: EmailStr | None = None
-    password: str = Password
+    password: Password
 
 
 class ForgotPassword(BaseModel):
@@ -52,12 +71,12 @@ class UserUpdate(BaseModel):
 
 
 class PasswordReset(BaseModel):
-    new_password: str = Password
+    new_password: Password
 
 
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=72)
-    new_password: str = Password
+    new_password: Password
 
 
 class UserLogin(BaseModel):

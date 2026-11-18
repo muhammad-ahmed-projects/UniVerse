@@ -4,7 +4,8 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts";
 import { CheckCircleIcon } from "@/icons";
-import { ApiError, MIN_PASSWORD_LENGTH, requestAccount } from "@/services";
+import { PasswordChecklist } from "@/components/users/password-checklist";
+import { ApiError, isStrongPassword, requestAccount } from "@/services";
 import { useState } from "react";
 import { Link, Navigate } from "react-router";
 import SignInHeader from "../sign-in/header";
@@ -57,7 +58,7 @@ export default function AccountRequestPage() {
   const mismatch = confirm.length > 0 && confirm !== password;
   const canSubmit =
     USERNAME_PATTERN.test(username) &&
-    password.length >= MIN_PASSWORD_LENGTH &&
+    isStrongPassword(password) &&
     password === confirm;
 
   const submit = async () => {
@@ -112,7 +113,7 @@ export default function AccountRequestPage() {
             <Input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. aiman"
+              placeholder="e.g. ahmed"
               autoComplete="username"
               maxLength={50}
               aria-invalid={usernameInvalid || undefined}
@@ -148,13 +149,11 @@ export default function AccountRequestPage() {
               autoComplete="new-password"
               maxLength={72}
             />
-            <p className="text-xs text-gray-400">
-              At least {MIN_PASSWORD_LENGTH} characters.
-            </p>
+            <PasswordChecklist password={password} />
           </Field>
           <Field>
             <FieldLabel>
-              Repeat password <span className="text-red-500">*</span>
+              Confirm password <span className="text-red-500">*</span>
             </FieldLabel>
             <Input
               type="password"

@@ -40,6 +40,11 @@ are admin-only, and embeddings are admin or `ai_service` only.
 | POST | `/users/{id}/dismiss-reset` | Close a forgot-password request without changing the password. |
 | DELETE | `/users/{id}` | 204. 409 if the account acknowledged/resolved incidents (deactivate it instead, so the review history keeps who did it). |
 
+Passwords (create, sign-up, reset, change) must be 8-72 characters with an
+uppercase letter, a lowercase letter, a number and a special character;
+otherwise 422 naming what's missing ("Password needs an uppercase letter
+(A-Z), ..."). Existing passwords keep working for sign-in.
+
 Guards: an admin can't change their own role, deactivate or delete
 themselves, and the last active admin can't be removed. Tokens carry
 `iat`; any token issued before an account's last password change or

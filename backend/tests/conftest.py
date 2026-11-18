@@ -66,9 +66,9 @@ def fake_command(script: str, camera_id: int, source: str) -> list[str]:
     return [sys.executable, "-u", "-c", FAKE_SCRIPT, script]
 
 
-ADMIN = ("admin_t", "admin-pass-123")
-OPERATOR = ("operator_t", "operator-pass-123")
-AI_SERVICE = ("ai_service_t", "ai-service-pass-123")
+ADMIN = ("admin_t", "Admin-pass-123")
+OPERATOR = ("operator_t", "Operator-pass-123")
+AI_SERVICE = ("ai_service_t", "Service-pass-123")
 
 
 @pytest.fixture(scope="session", autouse=True)
