@@ -7,3 +7,4 @@ export * from "./dashboard";
 export * from "./incidents";
 export * from "./people";
 export * from "./runners";
+export * from "./users";

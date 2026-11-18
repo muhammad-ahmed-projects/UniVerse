@@ -30,6 +30,7 @@
       "surveillanceIncidents": "Incidents",
       "surveillancePeople": "Registered People",
       "surveillanceSettings": "Settings",
+      "users": "Users",
       "analytics": "Analytics",
       "marketing": "Marketing",
       "crm": "CRM",
@@ -144,7 +145,7 @@
     }
   },
   "header": {
-    "searchPlaceholder": "Search or type command...",
+    "searchPlaceholder": "Search cameras, people, alerts, pages...",
     "toggleSidebar": "Toggle Sidebar",
     "notifications": {
       "title": "Notification",
@@ -156,10 +157,8 @@
     }
   },
   "userDropdown": {
-    "editProfile": "Edit profile",
-    "accountSettings": "Account settings",
-    "support": "Support",
-    "language": "Language",
+    "profile": "My profile",
+    "manageUsers": "Manage users",
     "signOut": "Sign out"
   },
   "ecommerce": {

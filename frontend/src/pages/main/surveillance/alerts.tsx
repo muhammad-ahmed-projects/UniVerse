@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast-manager";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { HIGHLIGHT_ROW, useHighlight } from "@/hooks/use-highlight";
 import { type Alert, ApiError, alertsApi, incidentsApi } from "@/services";
 import { useEffect, useState } from "react";
 
@@ -25,6 +26,7 @@ function PriorityBadge({ priority }: { priority: string }) {
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
+  const highlight = useHighlight("alert", alerts !== null);
   const [error, setError] = useState<string | null>(null);
   const [promotingId, setPromotingId] = useState<number | null>(null);
 
@@ -183,7 +185,13 @@ export default function AlertsPage() {
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {alerts.map((alert) => (
-                    <TableRow key={alert.id}>
+                    <TableRow
+                      key={alert.id}
+                      id={`alert-${alert.id}`}
+                      className={
+                        highlight === alert.id ? HIGHLIGHT_ROW : undefined
+                      }
+                    >
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {new Date(alert.triggered_at).toLocaleString()}
                       </TableCell>

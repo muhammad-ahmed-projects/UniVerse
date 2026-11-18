@@ -28,6 +28,7 @@ import {
 import { toast } from "@/components/ui/toast-manager";
 import { useAuth } from "@/contexts";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { HIGHLIGHT_ROW, useHighlight } from "@/hooks/use-highlight";
 import { useNow } from "@/hooks/use-now";
 import {
   ApiError,
@@ -45,6 +46,7 @@ const HEADER_CELL =
 export default function PeoplePage() {
   const { user } = useAuth();
   const [people, setPeople] = useState<Person[] | null>(null);
+  const highlight = useHighlight("person", people !== null);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -274,7 +276,13 @@ export default function PeoplePage() {
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {people.map((person) => (
-                    <TableRow key={person.id}>
+                    <TableRow
+                      key={person.id}
+                      id={`person-${person.id}`}
+                      className={
+                        highlight === person.id ? HIGHLIGHT_ROW : undefined
+                      }
+                    >
                       <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
                         {person.name}
                       </TableCell>

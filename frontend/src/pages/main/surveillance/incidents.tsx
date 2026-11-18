@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast-manager";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { HIGHLIGHT_ROW, useHighlight } from "@/hooks/use-highlight";
 import { ApiError, type Incident, incidentsApi } from "@/services";
 import { useEffect, useState } from "react";
 
@@ -26,6 +27,7 @@ function StatusBadge({ status }: { status: Incident["status"] }) {
 
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[] | null>(null);
+  const highlight = useHighlight("incident", incidents !== null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
@@ -165,7 +167,13 @@ export default function IncidentsPage() {
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
                   {incidents.map((incident) => (
-                    <TableRow key={incident.id}>
+                    <TableRow
+                      key={incident.id}
+                      id={`incident-${incident.id}`}
+                      className={
+                        highlight === incident.id ? HIGHLIGHT_ROW : undefined
+                      }
+                    >
                       <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
                         {incident.title}
                       </TableCell>

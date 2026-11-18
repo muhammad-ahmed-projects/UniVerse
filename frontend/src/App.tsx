@@ -7,7 +7,9 @@ import IncidentsPage from "@/pages/main/surveillance/incidents";
 import LiveViewPage from "@/pages/main/surveillance/live";
 import OverviewPage from "@/pages/main/surveillance/overview";
 import PeoplePage from "@/pages/main/surveillance/people";
+import ProfilePage from "@/pages/main/surveillance/profile";
 import SettingsPage from "@/pages/main/surveillance/settings";
+import UsersPage from "@/pages/main/surveillance/users";
 import { AuthLayout, SignInPage } from "@/pages/others/auth";
 import "flatpickr/dist/flatpickr.css";
 import { Route, Routes } from "react-router";
@@ -25,6 +27,8 @@ export default function App() {
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/people" element={<PeoplePage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
       </Route>
 

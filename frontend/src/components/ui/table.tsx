@@ -15,7 +15,7 @@ interface TableBodyProps {
   className?: string;
 }
 
-interface TableRowProps {
+interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
   children: ReactNode;
   className?: string;
 }
@@ -38,8 +38,16 @@ const TableBody: React.FC<TableBodyProps> = ({ children, className }) => {
   return <tbody className={className}>{children}</tbody>;
 };
 
-const TableRow: React.FC<TableRowProps> = ({ children, className }) => {
-  return <tr className={className}>{children}</tr>;
+const TableRow: React.FC<TableRowProps> = ({
+  children,
+  className,
+  ...props
+}) => {
+  return (
+    <tr className={className} {...props}>
+      {children}
+    </tr>
+  );
 };
 
 const TableCell: React.FC<TableCellProps> = ({

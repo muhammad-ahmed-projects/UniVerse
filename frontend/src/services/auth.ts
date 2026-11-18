@@ -9,6 +9,7 @@ export interface CurrentUser {
   email: string | null;
   role: UserRole;
   is_active: boolean;
+  created_at: string;
 }
 
 export async function login(

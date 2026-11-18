@@ -20,6 +20,7 @@ import {
 import { toast } from "@/components/ui/toast-manager";
 import { useAuth } from "@/contexts";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { HIGHLIGHT_ROW, useHighlight } from "@/hooks/use-highlight";
 import { useRunners } from "@/hooks/use-runners";
 import {
   ApiError,
@@ -43,6 +44,7 @@ export default function CamerasPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [cameras, setCameras] = useState<Camera[] | null>(null);
+  const highlight = useHighlight("camera", cameras !== null);
   const [error, setError] = useState<string | null>(null);
   const [formFor, setFormFor] = useState<Camera | "new" | null>(null);
   const [monitorId, setMonitorId] = useState<number | null>(null);
@@ -156,7 +158,13 @@ export default function CamerasPage() {
                       ? runner.scripts.filter((s) => s.running)
                       : [];
                     return (
-                      <TableRow key={camera.id}>
+                      <TableRow
+                        key={camera.id}
+                        id={`camera-${camera.id}`}
+                        className={
+                          highlight === camera.id ? HIGHLIGHT_ROW : undefined
+                        }
+                      >
                         {/* AI scripts take this as --camera-id. */}
                         <TableCell className="font-mono px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                           {camera.id}

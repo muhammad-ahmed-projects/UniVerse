@@ -1,45 +1,38 @@
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuPortal,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { useAuth } from "@/contexts";
-import { useChangeLocale, useLocale, useTranslations } from "@/i18n";
-import { getLanguage, languages } from "@/i18n/languages";
-import type { Locale } from "@/i18n/routing";
-import { ChevronDownIcon, GlobeIcon, LogOutIcon } from "@/icons";
+import { useTranslations } from "@/i18n";
+import {
+  ChevronDownIcon,
+  LogOutIcon,
+  UserCircleIcon,
+  UsersIcon,
+} from "@/icons";
+import { ROLE_LABELS } from "@/services";
 import { cn } from "@/utils";
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 
 export default function UserDropdown() {
   const t = useTranslations("userDropdown");
-  const locale = useLocale() as Locale;
   const navigate = useNavigate();
-  const changeLocale = useChangeLocale();
-  const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuth();
+
+  const go = (path: string) => {
+    setIsOpen(false);
+    void navigate(path);
+  };
 
   const handleSignOut = () => {
     setIsOpen(false);
     logout();
     void navigate("/signin");
-  };
-
-  const currentLang = getLanguage(locale);
-  const CurrentFlagIcon = currentLang.FlagIcon;
-
-  const handleSelectLanguage = (id: Locale) => {
-    void changeLocale(id);
-    void navigate(pathname, { replace: true });
   };
 
   return (
@@ -70,71 +63,22 @@ export default function UserDropdown() {
             {user?.username}
           </span>
           <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-            {user?.email ?? user?.role}
+            {user ? (user.email ?? ROLE_LABELS[user.role]) : ""}
           </span>
         </div>
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <GlobeIcon className="size-6" />
-            <span>{t("language")}</span>
-            <Badge
-              variant="light"
-              color="gray"
-              size="sm"
-              className="ms-auto me-1 h-auto gap-1.5 border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 text-shadow-none dark:border-gray-800 dark:bg-white/3 dark:text-gray-300 dark:text-shadow-none [&>svg]:size-3.5"
-            >
-              <span>{currentLang.shortName}</span>
-              <CurrentFlagIcon className="size-3.5 shrink-0 overflow-hidden rounded-full" />
-            </Badge>
-          </DropdownMenuSubTrigger>
-
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent className="w-56 p-2">
-              {languages.map((language) => {
-                const isSelected = locale === language.id;
-                const FlagIcon = language.FlagIcon;
-
-                return (
-                  <DropdownMenuItem
-                    key={language.id}
-                    onClick={() => handleSelectLanguage(language.id)}
-                    className={cn(
-                      "flex items-center justify-between gap-2",
-                      isSelected &&
-                        "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full transition-opacity",
-                          isSelected
-                            ? "bg-brand-500 opacity-100 dark:bg-brand-400"
-                            : "opacity-0",
-                        )}
-                      />
-                      <FlagIcon className="size-5 shrink-0 overflow-hidden rounded-full" />
-                      <span className="truncate">{language.name}</span>
-                    </span>
-
-                    {language.badge && (
-                      <Badge
-                        variant="light"
-                        color="warning"
-                        className="rounded text-xs"
-                      >
-                        {language.badge}
-                      </Badge>
-                    )}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
+        <DropdownMenuItem onClick={() => go("/profile")}>
+          <UserCircleIcon className="size-6" />
+          {t("profile")}
+        </DropdownMenuItem>
+        {user?.role === "admin" && (
+          <DropdownMenuItem onClick={() => go("/users")}>
+            <UsersIcon className="size-6" />
+            {t("manageUsers")}
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 

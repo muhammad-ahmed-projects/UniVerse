@@ -17,4 +17,6 @@ export interface NavItem {
   new?: boolean;
   target?: string;
   subItems?: SubItem[];
+  /** Hidden for non-admins (the API enforces the same rule). */
+  adminOnly?: boolean;
 }

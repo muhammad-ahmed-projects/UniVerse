@@ -4,6 +4,7 @@ import {
   GearIcon,
   LayoutGridIcon,
   OctagonAlertIcon,
+  UserCircleIcon,
   UsersIcon,
   VideoIcon,
 } from "@/icons";
@@ -44,6 +45,12 @@ export const navItems: NavItem[] = [
     icon: <GearIcon className="size-6" />,
     key: "surveillanceSettings",
     path: "/settings",
+  },
+  {
+    icon: <UserCircleIcon className="size-6" />,
+    key: "users",
+    path: "/users",
+    adminOnly: true,
   },
 ];
 
