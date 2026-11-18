@@ -420,6 +420,13 @@ all seven behaviors against the webcam, each one individually testable.
     (Calendar, Profile, Forms, Tables, Charts, UI Elements, Blank page,
     Sign Up, the sidebar's "Purchase Plan" upsell widget) and replaced
     the fake "team activity" notification-bell data with real alerts
+  - UI feedback: no native browser dialogs. Destructive actions confirm
+    via `components/shared/confirm-dialog.tsx`; action results (success
+    and failure) show as toasts via `toast.*` from
+    `components/ui/toast-manager.ts` (Base UI Toast, `<Toaster />` mounted
+    in `main.tsx`). Inline red banners are only for page-load failures.
+    Verified in headless Chrome (register/remove/cancel, error toast,
+    dismiss, auto-dismiss; audit E2E 30/30)
   - [x] Live-WebSocket-in-browser test — confirmed as part of Phase 5
     full-pipeline integration below: Alerts page stayed open in a real
     browser tab, a real AI-script-fired alert appeared live with no

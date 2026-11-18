@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, ThemeProvider } from "@/contexts";
 import { I18nProvider } from "@/i18n";
@@ -17,6 +18,7 @@ createRoot(document.getElementById("root")!).render(
             <TooltipProvider>
               <AuthProvider>
                 <App />
+                <Toaster />
               </AuthProvider>
             </TooltipProvider>
           </I18nProvider>

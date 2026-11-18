@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast-manager";
 import { useAuth } from "@/contexts";
 import {
   ApiError,
@@ -71,25 +72,20 @@ export default function SettingsPage() {
   const [form, setForm] = useState<CameraSettingsInput>(DEFAULTS);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "error" | "success";
-    text: string;
-  } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const selectCamera = (cameraId: string) => {
     setSelectedCameraId(cameraId);
     if (!cameraId) return;
     setIsLoading(true);
-    setMessage(null);
+    setLoadError(null);
     cameraSettingsApi
       .get(Number(cameraId))
       .then((settings) => setForm(settings))
       .catch((err: unknown) =>
-        setMessage({
-          type: "error",
-          text:
-            err instanceof ApiError ? err.message : "Failed to load settings",
-        }),
+        setLoadError(
+          err instanceof ApiError ? err.message : "Failed to load settings",
+        ),
       )
       .finally(() => setIsLoading(false));
   };
@@ -102,11 +98,9 @@ export default function SettingsPage() {
         if (list.length > 0) selectCamera(String(list[0].id));
       })
       .catch((err: unknown) =>
-        setMessage({
-          type: "error",
-          text:
-            err instanceof ApiError ? err.message : "Failed to load cameras",
-        }),
+        setLoadError(
+          err instanceof ApiError ? err.message : "Failed to load cameras",
+        ),
       );
   }, []);
 
@@ -117,15 +111,20 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    setMessage(null);
     try {
       await cameraSettingsApi.update(Number(selectedCameraId), form);
-      setMessage({ type: "success", text: "Settings saved." });
+      const cameraName = cameras.find(
+        (c) => String(c.id) === selectedCameraId,
+      )?.name;
+      toast.success(
+        "Settings saved",
+        `Restart ${cameraName ?? "this camera"}'s detection scripts to apply them.`,
+      );
     } catch (err) {
-      setMessage({
-        type: "error",
-        text: err instanceof ApiError ? err.message : "Failed to save settings",
-      });
+      toast.error(
+        "Couldn't save settings",
+        err instanceof ApiError ? err.message : undefined,
+      );
     } finally {
       setIsSaving(false);
     }
@@ -171,15 +170,9 @@ export default function SettingsPage() {
           </Field>
         </div>
 
-        {message && (
-          <div
-            className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-              message.type === "error"
-                ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                : "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400"
-            }`}
-          >
-            {message.text}
+        {loadError && (
+          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            {loadError}
           </div>
         )}
 
@@ -189,7 +182,7 @@ export default function SettingsPage() {
           </div>
         ) : !selectedCameraId ? (
           <p className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-            No cameras registered yet — add one from the Cameras page first.
+            No cameras registered yet â€” add one from the Cameras page first.
           </p>
         ) : (
           <fieldset

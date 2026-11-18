@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toast } from "@/components/ui/toast-manager";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
 import { type Alert, ApiError, alertsApi, incidentsApi } from "@/services";
 import { useEffect, useState } from "react";
@@ -65,7 +66,6 @@ export default function AlertsPage() {
 
   const promoteToIncident = async (alert: Alert) => {
     setPromotingId(alert.id);
-    setError(null);
     try {
       const incident = await incidentsApi.create({
         camera_id: alert.camera_id,
@@ -80,9 +80,14 @@ export default function AlertsPage() {
             a.id === alert.id ? { ...a, incident_id: incident.id } : a,
           ) ?? prev,
       );
+      toast.success(
+        `Incident #${incident.id} created`,
+        "Acknowledge and resolve it from the Incidents page.",
+      );
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to create incident",
+      toast.error(
+        "Couldn't create incident",
+        err instanceof ApiError ? err.message : undefined,
       );
     } finally {
       setPromotingId(null);

@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toast } from "@/components/ui/toast-manager";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
 import { ApiError, type Incident, incidentsApi } from "@/services";
 import { useEffect, useState } from "react";
@@ -56,8 +57,18 @@ export default function IncidentsPage() {
       setIncidents(
         (prev) => prev?.map((i) => (i.id === updated.id ? updated : i)) ?? prev,
       );
+      toast.success(
+        action === "acknowledge"
+          ? `Incident #${updated.id} acknowledged`
+          : `Incident #${updated.id} resolved`,
+      );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Action failed");
+      toast.error(
+        action === "acknowledge"
+          ? "Couldn't acknowledge incident"
+          : "Couldn't resolve incident",
+        err instanceof ApiError ? err.message : undefined,
+      );
     } finally {
       setBusyId(null);
     }

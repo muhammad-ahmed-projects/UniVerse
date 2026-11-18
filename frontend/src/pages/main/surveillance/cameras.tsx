@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toast } from "@/components/ui/toast-manager";
 import { useAuth } from "@/contexts";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
 import {
@@ -68,7 +69,7 @@ export default function CamerasPage() {
   const handleCreate = async () => {
     setIsSaving(true);
     try {
-      await camerasApi.create({
+      const created = await camerasApi.create({
         name,
         location: location || undefined,
         stream_source: streamSource,
@@ -77,10 +78,12 @@ export default function CamerasPage() {
       setLocation("");
       setStreamSource("");
       setIsDialogOpen(false);
+      toast.success("Camera added", created.name);
       load();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to create camera",
+      toast.error(
+        "Couldn't add camera",
+        err instanceof ApiError ? err.message : undefined,
       );
     } finally {
       setIsSaving(false);
@@ -208,7 +211,7 @@ export default function CamerasPage() {
                         {camera.name}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {camera.location ?? "—"}
+                        {camera.location ?? "â€”"}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {camera.stream_source}
@@ -219,7 +222,7 @@ export default function CamerasPage() {
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {camera.last_seen_at
                           ? new Date(camera.last_seen_at).toLocaleString()
-                          : "—"}
+                          : "â€”"}
                       </TableCell>
                     </TableRow>
                   ))}

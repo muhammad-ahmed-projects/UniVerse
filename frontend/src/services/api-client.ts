@@ -32,7 +32,9 @@ function formatDetail(detail: unknown): string | null {
     return detail
       .map((d: { loc?: unknown[]; msg?: string }) => {
         const field = d.loc?.filter((p) => p !== "body").join(".");
-        return field ? `${field}: ${d.msg ?? "invalid"}` : (d.msg ?? "invalid");
+        // Pydantic prefixes custom validator messages with "Value error, ".
+        const msg = (d.msg ?? "invalid").replace(/^Value error, /, "");
+        return field ? `${field}: ${msg}` : msg;
       })
       .join("; ");
   }

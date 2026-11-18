@@ -1,4 +1,5 @@
 import { ComponentCard } from "@/components/shared/component-card";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { PageMeta } from "@/components/shared/page-meta";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toast } from "@/components/ui/toast-manager";
 import { useAuth } from "@/contexts";
 import { ApiError, type Person, peopleApi } from "@/services";
 import { useEffect, useState } from "react";
@@ -33,7 +35,8 @@ export default function PeoplePage() {
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [removingId, setRemovingId] = useState<number | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<Person | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const isAdmin = user?.role === "admin";
 
   const load = () => {
@@ -52,33 +55,41 @@ export default function PeoplePage() {
   const handleCreate = async () => {
     setIsSaving(true);
     try {
-      await peopleApi.create({ name, notes: notes || undefined });
+      const created = await peopleApi.create({
+        name,
+        notes: notes || undefined,
+      });
       setName("");
       setNotes("");
       setIsDialogOpen(false);
+      toast.success("Person registered", created.name);
       load();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to register person",
+      toast.error(
+        "Couldn't register person",
+        err instanceof ApiError ? err.message : undefined,
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleRemove = async (person: Person) => {
-    if (!window.confirm(`Remove ${person.name} from the registry?`)) return;
-    setRemovingId(person.id);
-    setError(null);
+  const handleRemove = async () => {
+    if (!pendingRemoval) return;
+    const person = pendingRemoval;
+    setIsRemoving(true);
     try {
       await peopleApi.remove(person.id);
       setPeople((prev) => prev?.filter((p) => p.id !== person.id) ?? prev);
+      setPendingRemoval(null);
+      toast.success("Person removed", person.name);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to remove person",
+      toast.error(
+        "Couldn't remove person",
+        err instanceof ApiError ? err.message : undefined,
       );
     } finally {
-      setRemovingId(null);
+      setIsRemoving(false);
     }
   };
 
@@ -190,7 +201,7 @@ export default function PeoplePage() {
                         {person.name}
                       </TableCell>
                       <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {person.notes ?? "—"}
+                        {person.notes ?? "â€”"}
                       </TableCell>
                       <TableCell className="px-5 py-4">
                         <Badge color={person.is_active ? "success" : "gray"}>
@@ -202,10 +213,9 @@ export default function PeoplePage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={removingId === person.id}
-                            onClick={() => void handleRemove(person)}
+                            onClick={() => setPendingRemoval(person)}
                           >
-                            {removingId === person.id ? <Spinner /> : "Remove"}
+                            Remove
                           </Button>
                         </TableCell>
                       )}
@@ -217,6 +227,26 @@ export default function PeoplePage() {
           </div>
         )}
       </ComponentCard>
+
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoval(null);
+        }}
+        title="Remove person?"
+        description={
+          <>
+            <span className="font-medium text-gray-800 dark:text-white/90">
+              {pendingRemoval?.name}
+            </span>{" "}
+            will be removed from the registry. This can't be undone.
+          </>
+        }
+        confirmLabel="Remove"
+        destructive
+        isConfirming={isRemoving}
+        onConfirm={() => void handleRemove()}
+      />
     </div>
   );
 }
