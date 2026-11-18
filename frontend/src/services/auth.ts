@@ -10,6 +10,28 @@ export interface CurrentUser {
   role: UserRole;
   is_active: boolean;
   created_at: string;
+  /** Asked for an account on the sign-in page; can't sign in until approved. */
+  is_pending: boolean;
+  /** Set by "Forgot password?"; cleared when an admin resets the password. */
+  password_reset_requested_at: string | null;
+}
+
+/** Public "Create account": the account waits for an admin's approval. */
+export function requestAccount(input: {
+  username: string;
+  email?: string;
+  password: string;
+}): Promise<{ detail: string }> {
+  return apiClient.post<{ detail: string }>("/auth/signup", input);
+}
+
+/** Public "Forgot password?": asks an admin to set a new password. */
+export function requestPasswordReset(
+  username: string,
+): Promise<{ detail: string }> {
+  return apiClient.post<{ detail: string }>("/auth/forgot-password", {
+    username,
+  });
 }
 
 export async function login(

@@ -23,6 +23,8 @@ are admin-only, and embeddings are admin or `ai_service` only.
 | POST | `/auth/register` | admin | Create a new user account (same as `POST /users`). No public self-registration. |
 | POST | `/auth/login` | none | Form-encoded (`username`, `password`), not JSON. Returns a JWT. |
 | GET | `/auth/me` | any | Returns the current user. |
+| POST | `/auth/signup` | none | Public "Create account": `{username, email?, password}`. Creates a **pending** account (can't sign in; login returns 403 "waiting for an admin to approve it") until an admin approves it. The requester can't choose a role. 400 if the username/email is taken, 429 once 20 requests are waiting. Broadcasts `account_request`. 202. |
+| POST | `/auth/forgot-password` | none | Public `{username}`: flags the account for an admin to reset (no email server). Same 202 reply whether or not the username exists; repeat requests don't stack; pending/disabled accounts are ignored. Broadcasts `account_request`. |
 | POST | `/auth/change-password` | any | `{current_password, new_password}` (8-72 chars). 400 if the current password is wrong or the new one is the same. Signs out the account's other sessions and returns a fresh token for this one. |
 
 ## Users (admin only)
@@ -32,7 +34,10 @@ are admin-only, and embeddings are admin or `ai_service` only.
 | GET | `/users` | All accounts: `{id, username, email, role, is_active, created_at}`. |
 | POST | `/users` | `{username, email?, password, role}`. Username: 3-50 chars of letters, digits, `._-`. 400 if the username or email is taken. |
 | PATCH | `/users/{id}` | Any of `{email, role, is_active}`. A deactivated account can't sign in, and its open sessions stop working. |
-| POST | `/users/{id}/password` | `{new_password}`. Signs out every session of that account. 204. |
+| POST | `/users/{id}/password` | `{new_password}`. Signs out every session of that account and closes its forgot-password request. 204. |
+| GET | `/users/requests` | `{signups, password_resets}` waiting for an admin (the sidebar badge). |
+| POST | `/users/{id}/approve` | `{role}`: accept a pending account request (400 if it isn't pending). Reject = `DELETE /users/{id}`. A pending account can't be edited with PATCH. |
+| POST | `/users/{id}/dismiss-reset` | Close a forgot-password request without changing the password. |
 | DELETE | `/users/{id}` | 204. 409 if the account acknowledged/resolved incidents (deactivate it instead, so the review history keeps who did it). |
 
 Guards: an admin can't change their own role, deactivate or delete

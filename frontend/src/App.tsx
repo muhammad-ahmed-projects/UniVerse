@@ -10,7 +10,12 @@ import PeoplePage from "@/pages/main/surveillance/people";
 import ProfilePage from "@/pages/main/surveillance/profile";
 import SettingsPage from "@/pages/main/surveillance/settings";
 import UsersPage from "@/pages/main/surveillance/users";
-import { AuthLayout, SignInPage } from "@/pages/others/auth";
+import {
+  AccountRequestPage,
+  AuthLayout,
+  ForgotPasswordPage,
+  SignInPage,
+} from "@/pages/others/auth";
 import "flatpickr/dist/flatpickr.css";
 import { Route, Routes } from "react-router";
 
@@ -35,6 +40,8 @@ export default function App() {
       {/* Auth Layout */}
       <Route element={<AuthLayout />}>
         <Route path="/signin" element={<SignInPage />} />
+        <Route path="/signup" element={<AccountRequestPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
 
       {/* Full-width / Error / Status Pages */}

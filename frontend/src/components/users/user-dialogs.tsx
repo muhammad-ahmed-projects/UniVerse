@@ -33,7 +33,7 @@ import { useState } from "react";
 
 const ROLES = Object.keys(ROLE_LABELS) as UserRole[];
 
-function RoleSelect({
+export function RoleSelect({
   value,
   onChange,
   disabled,
@@ -218,9 +218,11 @@ export function UserFormDialog({
 export function ResetPasswordDialog({
   user,
   onOpenChange,
+  onDone,
 }: {
   user: User | null;
   onOpenChange: (open: boolean) => void;
+  onDone?: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -234,8 +236,11 @@ export function ResetPasswordDialog({
       await usersApi.resetPassword(user.id, password);
       toast.success(
         "Password reset",
-        `${user.username} is signed out everywhere and must use the new password.`,
+        user.password_reset_requested_at
+          ? `Tell ${user.username} the new password; their request is closed.`
+          : `${user.username} is signed out everywhere and must use the new password.`,
       );
+      onDone?.();
       onOpenChange(false);
     } catch (err) {
       toast.error(

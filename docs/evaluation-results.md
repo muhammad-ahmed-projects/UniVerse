@@ -868,3 +868,42 @@ audit-trail guard). Headless Chrome E2E 34/34, no console errors:
 Two UI bugs were found and fixed during the run. A search typed right
 after Esc closed itself (a pending blur timer). `TableRow` didn't forward
 `id`, which row highlighting needs.
+
+## Create account and forgot password (2026-11-18)
+
+A new team member had no way in without an admin creating their account,
+and a forgotten password needed someone to find an admin. The design keeps
+an admin in control, as a surveillance system should, and needs no email
+server:
+- **Create account** (sign-in page) creates a *pending* account. It can't
+  sign in, and the login says it is waiting for approval, until an admin
+  approves it on the Users page and picks the role. The requester can't
+  choose a role. The queue is capped at 20.
+- **Forgot password?** flags the account. The admin sets a new password
+  on the Users page, which closes the request, or dismisses it. The reply
+  is identical for unknown usernames, so the form can't be used to
+  discover accounts.
+- Admins see a red count on the sidebar's Users item, get a live toast
+  (`account_request` WebSocket message), and the Users page updates
+  without a refresh.
+
+Migration `d5e3f9a2b4c6` adds `users.is_pending` and
+`users.password_reset_requested_at`.
+
+**Tests:** backend pytest 75/75 (7 new):
+- pending login refused, with the reason shown only after a correct
+  password;
+- approval is admin-only and picks the role;
+- reject; validation; the requester can't pick a role; the queue cap;
+- neutral forgot-password reply; requests don't stack; a reset closes
+  the request; dismiss; pending accounts can't request a reset.
+
+Headless Chrome E2E 19/19 plus the users suite 34/34, no console errors:
+- sign-in links; request sent; the sign-in page explains the wait;
+  neutral forgot-password reply;
+- the badge shows 1, the request is listed, approve, the badge clears,
+  the new user signs in;
+- a request made while the admin watches brings a live toast, the badge
+  and the row without a refresh; reject;
+- a reset request shows on the user's row; the admin's reset closes it
+  and the new password works.

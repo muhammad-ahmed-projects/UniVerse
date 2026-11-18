@@ -1,5 +1,6 @@
 import { Sidebar, SidebarContent, useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts";
+import { useAccountRequests } from "@/hooks/use-account-requests";
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { navItems, othersItems, supportItems } from "./data";
@@ -64,10 +65,16 @@ export default function AppSidebar() {
   };
 
   const isAdmin = user?.role === "admin";
+  const requests = useAccountRequests(isAdmin);
+  const waiting = requests.signups + requests.password_resets;
   const activeSections = menuSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => isAdmin || !item.adminOnly),
+      items: section.items
+        .filter((item) => isAdmin || !item.adminOnly)
+        .map((item) =>
+          item.key === "users" ? { ...item, badgeCount: waiting } : item,
+        ),
     }))
     .filter((section) => section.items.length > 0);
 

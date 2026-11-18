@@ -26,6 +26,7 @@ export type SocketMessage =
       image: AlertImage;
     }
   | { type: "camera_runner"; camera_id: number; running: boolean }
+  | { type: "account_request"; kind: "signup" | "password_reset" }
   | {
       type: "person_seen";
       person_id: number;

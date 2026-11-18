@@ -123,6 +123,18 @@ export default function SidebarMenuItem({
             {showContent && (
               <span className="menu-item-text">{t(`items.${nav.key}`)}</span>
             )}
+            {Boolean(nav.badgeCount) && (
+              <span
+                className={cn(
+                  "ms-auto flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white",
+                  !showContent &&
+                    "absolute end-1 top-1 min-w-4 px-1 text-[10px]",
+                )}
+                aria-label={`${nav.badgeCount} waiting`}
+              >
+                {nav.badgeCount}
+              </span>
+            )}
           </Link>
         )
       )}

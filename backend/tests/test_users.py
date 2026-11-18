@@ -27,7 +27,7 @@ def test_admin_lists_and_creates_users(client: TestClient, admin_token: str) -> 
     created = _create(client, admin_token)
     assert created.status_code == 201, created.text
     assert created.json()["role"] == "security_operator"
-    assert "password" not in created.text and "hashed" not in created.text
+    assert "hashed_password" not in created.json() and "guard-pass-1" not in created.text
     assert client.post("/auth/login", data={"username": "guard1", "password": "guard-pass-1"}).status_code == 200
 
 

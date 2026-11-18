@@ -17,7 +17,10 @@ import {
   ResetPasswordDialog,
   UserFormDialog,
 } from "@/components/users/user-dialogs";
+import { PendingRequests } from "@/components/users/pending-requests";
 import { useAuth } from "@/contexts";
+import { notifyAccountRequestsChanged } from "@/hooks/use-account-requests";
+import { useAlertsSocket } from "@/hooks/use-alerts-socket";
 import { ApiError, ROLE_LABELS, type User, usersApi } from "@/services";
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router";
@@ -59,8 +62,29 @@ export default function UsersPage() {
     if (isAdmin) load();
   }, [isAdmin]);
 
+  useAlertsSocket((msg) => {
+    if (isAdmin && msg.type === "account_request") load();
+  });
+
   // Only admins manage users; the API refuses the same requests anyway.
   if (me && !isAdmin) return <Navigate to="/" replace />;
+
+  const pending = users?.filter((u) => u.is_pending) ?? [];
+  const accounts = users?.filter((u) => !u.is_pending) ?? [];
+
+  const dismissReset = async (target: User) => {
+    try {
+      await usersApi.dismissReset(target.id);
+      toast.success("Request dismissed", target.username);
+      notifyAccountRequestsChanged();
+      load();
+    } catch (err) {
+      toast.error(
+        "Couldn't dismiss",
+        err instanceof ApiError ? err.message : undefined,
+      );
+    }
+  };
 
   const handleDelete = async () => {
     if (!pendingDelete) return;
@@ -104,6 +128,19 @@ export default function UsersPage() {
           </div>
         )}
 
+        {pending.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
+            <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">
+              Waiting for approval ({pending.length})
+            </h4>
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              People who asked for an account on the sign-in page. Choose a role
+              and approve, or reject the request.
+            </p>
+            <PendingRequests users={pending} onChanged={load} />
+          </div>
+        )}
+
         {users === null ? (
           !error && (
             <div className="flex justify-center py-12">
@@ -131,7 +168,7 @@ export default function UsersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-                  {users.map((u) => {
+                  {accounts.map((u) => {
                     const isSelf = u.id === me?.id;
                     return (
                       <TableRow key={u.id}>
@@ -150,9 +187,14 @@ export default function UsersPage() {
                           <RoleBadge role={u.role} />
                         </TableCell>
                         <TableCell className="px-5 py-4">
-                          <Badge color={u.is_active ? "success" : "gray"}>
-                            {u.is_active ? "active" : "inactive"}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge color={u.is_active ? "success" : "gray"}>
+                              {u.is_active ? "active" : "inactive"}
+                            </Badge>
+                            {u.password_reset_requested_at && (
+                              <Badge color="warning">reset requested</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                           {new Date(u.created_at).toLocaleDateString()}
@@ -168,11 +210,24 @@ export default function UsersPage() {
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant={
+                                u.password_reset_requested_at
+                                  ? "default"
+                                  : "outline"
+                              }
                               onClick={() => setResetFor(u)}
                             >
                               Reset password
                             </Button>
+                            {u.password_reset_requested_at && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void dismissReset(u)}
+                              >
+                                Dismiss request
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="outline"
@@ -214,6 +269,10 @@ export default function UsersPage() {
         user={resetFor}
         onOpenChange={(open) => {
           if (!open) setResetFor(null);
+        }}
+        onDone={() => {
+          notifyAccountRequestsChanged();
+          load();
         }}
       />
 

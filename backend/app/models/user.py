@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
+from sqlalchemy import Boolean, DateTime, Enum, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -28,6 +28,11 @@ class User(Base):
     # Tokens issued before this moment are rejected, so changing or resetting a
     # password logs out every existing session of that account.
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Self-service account request from the sign-in page: can't sign in
+    # (is_active stays False) until an admin approves it on the Users page.
+    is_pending: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
+    # Set by "Forgot password?"; an admin resets the password and it's cleared.
+    password_reset_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def token_is_current(self, issued_at: float | None) -> bool:
         if self.password_changed_at is None:

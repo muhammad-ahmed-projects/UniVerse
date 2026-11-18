@@ -43,7 +43,17 @@ export const usersApi = {
       new_password: newPassword,
     }),
   remove: (id: number) => apiClient.delete<void>(`/users/${id}`),
+  requests: () => apiClient.get<AccountRequestCounts>("/users/requests"),
+  approve: (id: number, role: UserRole) =>
+    apiClient.post<User>(`/users/${id}/approve`, { role }),
+  dismissReset: (id: number) =>
+    apiClient.post<User>(`/users/${id}/dismiss-reset`),
 };
+
+export interface AccountRequestCounts {
+  signups: number;
+  password_resets: number;
+}
 
 /** Change your own password. The API logs out the account's other sessions
  * and returns a fresh token so this tab stays signed in. */

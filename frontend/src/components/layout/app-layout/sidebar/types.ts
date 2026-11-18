@@ -19,4 +19,6 @@ export interface NavItem {
   subItems?: SubItem[];
   /** Hidden for non-admins (the API enforces the same rule). */
   adminOnly?: boolean;
+  /** Red count bubble, e.g. account requests waiting for an admin. */
+  badgeCount?: number;
 }

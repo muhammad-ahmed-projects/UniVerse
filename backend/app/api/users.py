@@ -1,4 +1,6 @@
-"""Admin user management: list, add, edit role/email/active, reset password, delete.
+"""Admin user management: list, add, edit role/email/active, reset password,
+delete, and handle requests from the sign-in page (approve/reject account
+requests, close forgot-password requests).
 
 Guards that keep the system usable and the audit trail intact:
 - an admin can't demote, deactivate or delete their own account;
@@ -19,7 +21,14 @@ from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.incident import Incident
 from app.models.user import User, UserRole
-from app.schemas.auth import PasswordReset, UserOut, UserRegister, UserUpdate
+from app.schemas.auth import (
+    AccountRequestCounts,
+    ApproveRequest,
+    PasswordReset,
+    UserOut,
+    UserRegister,
+    UserUpdate,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 admin = require_role(UserRole.ADMIN)
@@ -51,6 +60,38 @@ def list_users(db: Session = Depends(get_db)) -> list[User]:
     return db.query(User).order_by(User.id).all()
 
 
+@router.get("/requests", response_model=AccountRequestCounts, dependencies=[Depends(admin)])
+def account_request_counts(db: Session = Depends(get_db)) -> AccountRequestCounts:
+    """What's waiting for an admin: account requests and forgot-password requests."""
+    return AccountRequestCounts(
+        signups=db.query(User).filter(User.is_pending.is_(True)).count(),
+        password_resets=db.query(User).filter(User.password_reset_requested_at.is_not(None)).count(),
+    )
+
+
+@router.post("/{user_id}/approve", response_model=UserOut, dependencies=[Depends(admin)])
+def approve_signup(user_id: int, payload: ApproveRequest, db: Session = Depends(get_db)) -> User:
+    """Accept an account request with the chosen role (reject = DELETE /users/{id})."""
+    user = _get_user_or_404(user_id, db)
+    if not user.is_pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This account isn't waiting for approval")
+    user.is_pending = False
+    user.is_active = True
+    user.role = payload.role
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/{user_id}/dismiss-reset", response_model=UserOut, dependencies=[Depends(admin)])
+def dismiss_reset_request(user_id: int, db: Session = Depends(get_db)) -> User:
+    user = _get_user_or_404(user_id, db)
+    user.password_reset_requested_at = None
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(admin)])
 def create_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
     if db.query(User).filter(User.username == payload.username).first():
@@ -75,6 +116,10 @@ def update_user(
     current: User = Depends(admin),
 ) -> User:
     user = _get_user_or_404(user_id, db)
+    if user.is_pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Approve or reject this account request first"
+        )
     changes = payload.model_dump(exclude_unset=True)
     # role/is_active can't be null; email may be cleared with null.
     changes = {k: v for k, v in changes.items() if v is not None or k == "email"}
@@ -101,10 +146,12 @@ def update_user(
 
 @router.post("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(admin)])
 def reset_password(user_id: int, payload: PasswordReset, db: Session = Depends(get_db)) -> None:
-    """Set a new password for an account; every existing session of it is logged out."""
+    """Set a new password for an account; every existing session of it is logged
+    out, and an open forgot-password request is closed."""
     user = _get_user_or_404(user_id, db)
     user.hashed_password = hash_password(payload.new_password)
     user.password_changed_at = datetime.now(UTC)
+    user.password_reset_requested_at = None
     db.commit()
 
 

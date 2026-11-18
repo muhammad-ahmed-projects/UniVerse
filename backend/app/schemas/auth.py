@@ -8,11 +8,39 @@ from app.models.user import UserRole
 Password = Field(min_length=8, max_length=72)
 
 
+Username = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
+
+
 class UserRegister(BaseModel):
-    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$")
+    username: str = Username
     email: EmailStr | None = None
     password: str = Password
     role: UserRole = UserRole.SECURITY_OPERATOR
+
+
+class SignupRequest(BaseModel):
+    """Public "Create account": the role is chosen by the admin who approves it."""
+
+    username: str = Username
+    email: EmailStr | None = None
+    password: str = Password
+
+
+class ForgotPassword(BaseModel):
+    username: str = Field(min_length=1, max_length=50)
+
+
+class ApproveRequest(BaseModel):
+    role: UserRole = UserRole.SECURITY_OPERATOR
+
+
+class AccountRequestCounts(BaseModel):
+    signups: int
+    password_resets: int
+
+
+class Message(BaseModel):
+    detail: str
 
 
 class UserUpdate(BaseModel):
@@ -46,6 +74,8 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+    is_pending: bool
+    password_reset_requested_at: datetime | None
 
 
 class Token(BaseModel):

@@ -13,6 +13,7 @@ import { EyeCloseIcon, EyeIcon } from "@/icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router";
 import { signInSchema, type SignInFormData } from "./schema";
 
 export default function SignInFormFields() {
@@ -97,6 +98,12 @@ export default function SignInFormFields() {
           </InputGroupAddon>
         </InputGroup>
         <FieldError errors={[errors.password]} />
+        <Link
+          to="/forgot-password"
+          className="mt-1.5 block text-end text-sm text-brand-500 hover:underline"
+        >
+          Forgot password?
+        </Link>
       </Field>
 
       <div>
@@ -109,6 +116,13 @@ export default function SignInFormFields() {
           {isSubmitting ? "Signing In..." : "Sign In"}
         </Button>
       </div>
+
+      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+        New here?{" "}
+        <Link to="/signup" className="text-brand-500 hover:underline">
+          Create account
+        </Link>
+      </p>
     </form>
   );
 }
