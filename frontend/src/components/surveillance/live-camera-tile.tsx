@@ -4,6 +4,7 @@ import { useNow } from "@/hooks/use-now";
 import { VideoIcon } from "@/icons";
 import type { Camera } from "@/services";
 import { cn } from "@/utils";
+import type { ReactNode } from "react";
 
 // Scripts send ~5 frames/s (face recognition on a CPU can be ~1/s); after
 // this long without one, the feed counts as stopped.
@@ -19,10 +20,13 @@ function StatusBadge({ status }: { status: Camera["status"] }) {
 export function LiveCameraTile({
   camera,
   onOpen,
+  badge,
   className,
 }: {
   camera: Camera;
   onOpen?: () => void;
+  /** Shown under the camera name, e.g. its monitoring state. */
+  badge?: ReactNode;
   className?: string;
 }) {
   const frame = useCameraFrame(camera.id);
@@ -49,10 +53,7 @@ export function LiveCameraTile({
           <VideoIcon className="size-8 text-gray-500" />
           <p className="text-sm font-medium text-gray-300">No live feed</p>
           <p className="text-xs text-gray-500">
-            Start a detection script for this camera with{" "}
-            <code className="rounded bg-white/10 px-1 py-0.5 text-gray-300">
-              --camera-id {camera.id}
-            </code>
+            Start monitoring for this camera to see it here.
           </p>
         </div>
       )}
@@ -101,10 +102,13 @@ export function LiveCameraTile({
           ID {camera.id}
         </p>
       </div>
-      {camera.location && (
-        <p className="-mt-1.5 truncate px-1 text-xs text-gray-500 dark:text-gray-400">
-          {camera.location}
-        </p>
+      {(camera.location || badge) && (
+        <div className="-mt-1.5 flex items-center justify-between gap-3 px-1">
+          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+            {camera.location}
+          </p>
+          {badge}
+        </div>
       )}
     </div>
   );

@@ -1,18 +1,14 @@
 import { ComponentCard } from "@/components/shared/component-card";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { PageMeta } from "@/components/shared/page-meta";
+import { CameraFormDialog } from "@/components/surveillance/camera-form-dialog";
+import {
+  MonitoringDialog,
+  RunnerStateBadge,
+} from "@/components/surveillance/monitoring-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -24,13 +20,18 @@ import {
 import { toast } from "@/components/ui/toast-manager";
 import { useAuth } from "@/contexts";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { useRunners } from "@/hooks/use-runners";
 import {
   ApiError,
   type Camera,
   type CameraStatus,
+  analysisLabel,
   camerasApi,
 } from "@/services";
 import { useEffect, useState } from "react";
+
+const HEADER_CELL =
+  "px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400";
 
 function StatusBadge({ status }: { status: CameraStatus }) {
   if (status === "online") return <Badge color="success">online</Badge>;
@@ -40,18 +41,22 @@ function StatusBadge({ status }: { status: CameraStatus }) {
 
 export default function CamerasPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [cameras, setCameras] = useState<Camera[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  const [streamSource, setStreamSource] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [formFor, setFormFor] = useState<Camera | "new" | null>(null);
+  const [monitorId, setMonitorId] = useState<number | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Camera | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { runners, refresh: refreshRunners } = useRunners();
 
   const load = () => {
     camerasApi
       .list()
-      .then(setCameras)
+      .then((list) => {
+        setCameras(list);
+        setError(null);
+      })
       .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Failed to load cameras",
@@ -66,29 +71,27 @@ export default function CamerasPage() {
     if (msg.type === "camera_status") load();
   });
 
-  const handleCreate = async () => {
-    setIsSaving(true);
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const camera = pendingDelete;
+    setIsDeleting(true);
     try {
-      const created = await camerasApi.create({
-        name,
-        location: location || undefined,
-        stream_source: streamSource,
-      });
-      setName("");
-      setLocation("");
-      setStreamSource("");
-      setIsDialogOpen(false);
-      toast.success("Camera added", created.name);
-      load();
+      await camerasApi.remove(camera.id);
+      setCameras((prev) => prev?.filter((c) => c.id !== camera.id) ?? prev);
+      setPendingDelete(null);
+      refreshRunners();
+      toast.success("Camera deleted", camera.name);
     } catch (err) {
       toast.error(
-        "Couldn't add camera",
+        "Couldn't delete camera",
         err instanceof ApiError ? err.message : undefined,
       );
     } finally {
-      setIsSaving(false);
+      setIsDeleting(false);
     }
   };
+
+  const monitorCamera = cameras?.find((c) => c.id === monitorId) ?? null;
 
   return (
     <div>
@@ -100,55 +103,11 @@ export default function CamerasPage() {
 
       <ComponentCard
         title="Cameras"
-        description="Live status of every registered camera. Status updates arrive in real time over the dashboard's WebSocket connection."
+        description="Every registered camera, its live status, and what's monitoring it. Open Monitoring to start or stop a camera's AI analyses and watch their output."
       >
         <div className="mb-4 flex justify-end">
-          {user?.role === "admin" && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <Button onClick={() => setIsDialogOpen(true)}>Add Camera</Button>
-              <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add Camera</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Field>
-                    <FieldLabel>Name</FieldLabel>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Front entrance"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Location</FieldLabel>
-                    <Input
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Mock office - entrance"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Stream source</FieldLabel>
-                    <Input
-                      value={streamSource}
-                      onChange={(e) => setStreamSource(e.target.value)}
-                      placeholder="Webcam index (0, 1, ...) or RTSP URL"
-                    />
-                  </Field>
-                </div>
-                <DialogFooter>
-                  <DialogClose
-                    render={<Button variant="outline">Cancel</Button>}
-                  />
-                  <Button
-                    onClick={handleCreate}
-                    disabled={isSaving || !name || !streamSource}
-                  >
-                    {isSaving ? <Spinner /> : "Save"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          {isAdmin && (
+            <Button onClick={() => setFormFor("new")}>Add Camera</Button>
           )}
         </div>
 
@@ -159,9 +118,11 @@ export default function CamerasPage() {
         )}
 
         {cameras === null ? (
-          <div className="flex justify-center py-12">
-            <Spinner className="size-6" />
-          </div>
+          !error && (
+            <div className="flex justify-center py-12">
+              <Spinner className="size-6" />
+            </div>
+          )
         ) : cameras.length === 0 ? (
           <p className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
             No cameras registered yet.
@@ -172,76 +133,145 @@ export default function CamerasPage() {
               <Table>
                 <TableHeader className="border-b border-gray-100 dark:border-white/5">
                   <TableRow>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      ID
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      Name
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      Location
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      Source
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      Status
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-5 py-3 text-start text-xs font-medium text-gray-500 dark:text-gray-400"
-                    >
-                      Last seen
-                    </TableCell>
+                    {[
+                      "ID",
+                      "Name",
+                      "Location",
+                      "Source",
+                      "Status",
+                      "Monitoring",
+                      "Last seen",
+                      "Action",
+                    ].map((label) => (
+                      <TableCell key={label} isHeader className={HEADER_CELL}>
+                        {label}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
-                  {cameras.map((camera) => (
-                    <TableRow key={camera.id}>
-                      {/* AI scripts take this as --camera-id. */}
-                      <TableCell className="font-mono px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {camera.id}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
-                        {camera.name}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {camera.location ?? "—"}
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {camera.stream_source}
-                      </TableCell>
-                      <TableCell className="px-5 py-4">
-                        <StatusBadge status={camera.status} />
-                      </TableCell>
-                      <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {camera.last_seen_at
-                          ? new Date(camera.last_seen_at).toLocaleString()
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {cameras.map((camera) => {
+                    const runner = runners.get(camera.id);
+                    const active = runner?.running
+                      ? runner.scripts.filter((s) => s.running)
+                      : [];
+                    return (
+                      <TableRow key={camera.id}>
+                        {/* AI scripts take this as --camera-id. */}
+                        <TableCell className="font-mono px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          {camera.id}
+                        </TableCell>
+                        <TableCell className="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
+                          {camera.name}
+                        </TableCell>
+                        <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          {camera.location ?? "—"}
+                        </TableCell>
+                        <TableCell className="max-w-56 truncate px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          {camera.stream_source}
+                        </TableCell>
+                        <TableCell className="px-5 py-4">
+                          <StatusBadge status={camera.status} />
+                        </TableCell>
+                        <TableCell className="px-5 py-4">
+                          <RunnerStateBadge runner={runner} />
+                          {active.length > 0 && (
+                            <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                              {active
+                                .map((s) => analysisLabel(s.name))
+                                .join(", ")}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          {camera.last_seen_at
+                            ? new Date(camera.last_seen_at).toLocaleString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="px-5 py-4">
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant={runner?.running ? "outline" : "default"}
+                              onClick={() => setMonitorId(camera.id)}
+                            >
+                              Monitoring
+                            </Button>
+                            {isAdmin && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setFormFor(camera)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setPendingDelete(camera)}
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
           </div>
         )}
       </ComponentCard>
+
+      {/* key: a fresh form per camera, prefilled from that camera */}
+      <CameraFormDialog
+        key={`form-${formFor === null ? "closed" : formFor === "new" ? "new" : formFor.id}`}
+        camera={formFor}
+        onOpenChange={(open) => {
+          if (!open) setFormFor(null);
+        }}
+        onSaved={() => load()}
+      />
+
+      <MonitoringDialog
+        key={`monitor-${monitorId ?? "closed"}`}
+        camera={monitorCamera}
+        runner={monitorId === null ? undefined : runners.get(monitorId)}
+        canControl={isAdmin}
+        onOpenChange={(open) => {
+          if (!open) setMonitorId(null);
+        }}
+        onChanged={() => {
+          refreshRunners();
+          load();
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete camera?"
+        description={
+          <>
+            <span className="font-medium text-gray-800 dark:text-white/90">
+              {pendingDelete?.name}
+            </span>{" "}
+            will be deleted together with all its alerts, incidents, evidence
+            photos and settings. Its monitoring is stopped. This can't be
+            undone.
+          </>
+        }
+        confirmLabel="Delete camera"
+        destructive
+        isConfirming={isDeleting}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

@@ -18,7 +18,16 @@ export interface CameraCreateInput {
   stream_source: string;
 }
 
+export interface CameraUpdateInput {
+  name?: string;
+  location?: string | null;
+  /** Omit to keep the saved source (responses show its password masked). */
+  stream_source?: string;
+}
+
 export const camerasApi = {
+  update: (id: number, input: CameraUpdateInput) =>
+    apiClient.put<Camera>(`/cameras/${id}`, input),
   list: () => apiClient.get<Camera[]>("/cameras"),
   get: (id: number) => apiClient.get<Camera>(`/cameras/${id}`),
   create: (input: CameraCreateInput) =>

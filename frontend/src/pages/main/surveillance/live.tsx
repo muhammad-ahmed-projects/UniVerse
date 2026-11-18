@@ -3,20 +3,22 @@ import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { PageMeta } from "@/components/shared/page-meta";
 import { LiveCameraTile } from "@/components/surveillance/live-camera-tile";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  MonitoringDialog,
+  RunnerStateBadge,
+} from "@/components/surveillance/monitoring-dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { useAuth } from "@/contexts";
 import { useAlertsSocket } from "@/hooks/use-alerts-socket";
+import { useRunners } from "@/hooks/use-runners";
 import { ApiError, type Camera, camerasApi } from "@/services";
 import { useEffect, useState } from "react";
 
 export default function LiveViewPage() {
+  const { user } = useAuth();
   const [cameras, setCameras] = useState<Camera[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openCameraId, setOpenCameraId] = useState<number | null>(null);
+  const { runners, refresh: refreshRunners } = useRunners();
 
   const load = () => {
     camerasApi
@@ -50,7 +52,7 @@ export default function LiveViewPage() {
 
       <ComponentCard
         title="Live View"
-        description="Every camera's feed as its AI script sees it: boxes, track IDs, recognized names and the restricted zone. A feed appears while a script runs for that camera with --camera-id. Click a camera to enlarge it."
+        description="Every camera's feed as its AI analysis sees it: boxes, track IDs, recognized names and the restricted zone. Click a camera to start or stop monitoring and see what its scripts are doing."
       >
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
@@ -75,25 +77,26 @@ export default function LiveViewPage() {
                 key={camera.id}
                 camera={camera}
                 onOpen={() => setOpenCameraId(camera.id)}
+                badge={<RunnerStateBadge runner={runners.get(camera.id)} />}
               />
             ))}
           </div>
         )}
       </ComponentCard>
 
-      <Dialog
-        open={openCamera !== null}
+      <MonitoringDialog
+        key={`monitor-${openCameraId ?? "closed"}`}
+        camera={openCamera}
+        runner={openCameraId === null ? undefined : runners.get(openCameraId)}
+        canControl={user?.role === "admin"}
         onOpenChange={(open) => {
           if (!open) setOpenCameraId(null);
         }}
-      >
-        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>{openCamera?.name}</DialogTitle>
-          </DialogHeader>
-          {openCamera && <LiveCameraTile camera={openCamera} />}
-        </DialogContent>
-      </Dialog>
+        onChanged={() => {
+          refreshRunners();
+          load();
+        }}
+      />
     </div>
   );
 }

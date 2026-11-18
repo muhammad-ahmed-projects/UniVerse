@@ -25,6 +25,7 @@ export type SocketMessage =
       incident_id: number | null;
       image: AlertImage;
     }
+  | { type: "camera_runner"; camera_id: number; running: boolean }
   | {
       type: "person_seen";
       person_id: number;

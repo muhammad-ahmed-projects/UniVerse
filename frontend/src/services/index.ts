@@ -6,3 +6,4 @@ export * from "./cameras";
 export * from "./dashboard";
 export * from "./incidents";
 export * from "./people";
+export * from "./runners";
