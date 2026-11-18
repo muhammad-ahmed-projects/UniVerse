@@ -155,7 +155,7 @@ export function MonitoringDialog({
         if (!open && busy === null) onOpenChange(false);
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[calc(100%-2rem)] overflow-y-auto sm:max-w-4xl">
+      <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             Monitoring · {camera?.name}

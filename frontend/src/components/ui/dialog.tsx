@@ -54,7 +54,8 @@ function DialogContent({
         className={cn(
           fullScreen
             ? "fixed inset-0 z-101 flex h-dvh w-screen max-w-none flex-col justify-between overflow-y-auto rounded-none border-none bg-white p-6 text-sm text-gray-700 shadow-none duration-100 outline-none data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0 sm:p-10 dark:bg-[#1E2635] dark:text-gray-300"
-            : "fixed inset-s-1/2 top-1/2 z-101 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-700 shadow-theme-lg duration-100 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 sm:max-w-lg rtl:translate-x-1/2 dark:border-gray-800 dark:bg-[#1E2635] dark:text-gray-300",
+            : // max-h + overflow: a tall dialog scrolls inside the window instead of spilling off-screen.
+              "fixed inset-s-1/2 top-1/2 z-101 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-700 shadow-theme-lg duration-100 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 sm:max-w-lg rtl:translate-x-1/2 dark:border-gray-800 dark:bg-[#1E2635] dark:text-gray-300",
           className,
         )}
         {...props}
@@ -107,7 +108,8 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-6 -mb-6 flex flex-col-reverse gap-3 rounded-b-2xl p-4 sm:flex-row sm:justify-end",
+        // Sticky, so Save/Cancel stay visible while a long dialog scrolls.
+        "sticky -bottom-6 z-10 -mx-6 -mb-6 flex flex-col-reverse gap-3 rounded-b-2xl bg-white p-4 sm:flex-row sm:justify-end dark:bg-[#1E2635]",
         className,
       )}
       {...props}
