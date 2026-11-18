@@ -353,7 +353,12 @@ all seven behaviors against the webcam, each one individually testable.
   done (`backend/app/ai/prototypes/face_recognition.py`), unknown-face
   rejection verified (4/4 correct), but only 1 of 3 team members
   registered so far — see `/docs/evaluation-results.md`; needs Khawaja
-  and Aiman to register before this can be checked off
+  and Aiman to register before this can be checked off. Since
+  2026-11-18 people register from the dashboard (Registered People >
+  Face photos, upload or browser camera) into the `face_embeddings`
+  table, so they can register from photos without the CLI; the old
+  `embeddings.pkl` is standalone-mode only. Re-register Ahmed on the
+  dashboard (the pickle entry isn't visible to the backend-wired script)
 - [x] Tracking (ByteTrack, via Ultralytics `model.track()`) merged with
   detection — see `/docs/evaluation-results.md`; 0 ID switches on a
   continuously-visible person (recorded clip + live webcam); multi-
@@ -411,7 +416,28 @@ all seven behaviors against the webcam, each one individually testable.
   - [x] Camera list/status page
   - [x] Alerts feed
   - [x] Incident detail view: acknowledge/resolve flow
-  - [x] Registered-people management page
+  - [x] Registered-people management page — until 2026-11-18 this only
+    stored names (consent records); it now really adds/removes faces
+    (Phase 4 step 5): consent checkbox, face photos by upload or browser
+    camera, server-side InsightFace embedding + thumbnail, photo count,
+    live "last seen" camera/time from face sightings
+  - [x] Camera monitoring from the dashboard + camera edit/delete
+    (2026-11-18) — admin opens Monitoring on a camera (Cameras page or
+    Live View tile), picks analyses (one per USB webcam), and the API
+    launches the AI scripts as child processes
+    (`services/camera_runner.py`, `POST/DELETE /cameras/{id}/runner`,
+    `GET /camera-runners`); dialog shows live video, running scripts and
+    their output; crashes mark the camera offline. Every script now
+    heartbeats "online" while frames flow. Verified: pytest 59/59,
+    headless-Chrome E2E 30/30 with real webcam + YOLO. Runners are
+    in-memory: restart monitoring after an API restart
+  - [x] Live View page (`/live`) — every camera's annotated feed, streamed
+    by its AI script (`POST /cameras/{id}/frame` -> `/ws/stream`, one
+    socket for all cameras); evidence photos on Alerts and Incidents (3
+    per alert, `alert_images` table, configurable retention); Settings
+    has the face-match threshold. Verified: pytest 51/51, real-model
+    API + script check 11/11, headless-Chrome E2E 27/27 with the real
+    webcam — see `/docs/evaluation-results.md` (2026-11-18 section)
   - [x] Settings page — per-camera ROI/loitering/tamper thresholds,
     backed by a real `camera_settings` table (migration `a7a79d74c895`)
     and `GET/PUT /cameras/{id}/settings` (admin-only write). Now
@@ -468,7 +494,8 @@ all seven behaviors against the webcam, each one individually testable.
   revoked users on the WebSocket; correctness: event-loop-blocking
   routes, review-flow races, resolve-before-acknowledge, unbounded
   lists, dead `/profile` links, WS retry loop on bad tokens; plus dead
-  TailAdmin code/branding). Added a backend pytest suite (28/28 pass,
+  TailAdmin code/branding). Added a backend pytest suite (28/28 pass at
+  the time, 59 now;
   separate `universe_test` DB) and ruff config; 28/28 headless-browser
   E2E checks pass. Details in `/docs/evaluation-results.md`. Run
   `python -m pytest` (backend) and `npm run build && npm run lint`

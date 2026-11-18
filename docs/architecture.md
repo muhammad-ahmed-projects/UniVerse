@@ -19,21 +19,28 @@ AI scripts (backend/app/ai/prototypes/)
   tamper_detection.py    -- covered/moved/defocused camera state
   camera_health.py       -- feed-loss / offline detection
         |
-        | backend_client.py (requests): GET camera_settings, POST alert, POST heartbeat
+        | backend_client.py (requests): GET camera_settings + face-embeddings,
+        | POST alert + evidence images, POST heartbeat, POST live frames,
+        | POST face sightings (frames/images/sightings on a background thread)
         v
 FastAPI backend (backend/app/)
   api/        -- route handlers (auth, cameras, people, alerts, incidents, ws)
   models/     -- SQLAlchemy ORM models
   schemas/    -- Pydantic request/response models
-  services/ws_manager.py -- in-memory WebSocket broadcast
+  services/   -- ws_manager (WebSocket broadcast), frame_store (latest live
+                 frame per camera), face_encoder (InsightFace for dashboard
+                 registration), media_store + images (evidence/face files),
+                 retention (evidence clean-up)
   db/         -- session + Alembic migrations
         |
-        | REST (JWT-authenticated) + WebSocket
+        | REST (JWT-authenticated) + 2 WebSockets (/ws/alerts, /ws/stream)
         v
 PostgreSQL                         React/TypeScript dashboard (frontend/)
   users, cameras, people,            built on TailAdmin, talks to the
   face_embeddings, alerts,           backend only through frontend/src/services/*.ts
-  incidents, camera_settings         (no inline fetch in components)
+  alert_images, incidents,           (no inline fetch in components)
+  camera_settings
+Files: backend/media/ (MEDIA_DIR)  evidence JPEGs + face thumbnails, gitignored
 ```
 
 ## Why AI scripts are separate processes, not in-process with the API
@@ -50,6 +57,17 @@ inside the FastAPI event loop. Reasons:
 - Each script can be developed, tested, and run completely standalone
   (see `/docs/evaluation-results.md` -- every script was verified on its
   own against a webcam before any backend integration existed).
+
+An admin normally starts them from the dashboard (Cameras or Live View >
+Monitoring): `services/camera_runner.py` launches the chosen scripts as
+child processes with the camera's saved stream source and `--headless`,
+keeps the last 200 lines of their output for the dashboard's Script
+output panel, and stops them on request or when the API shuts down. They
+stay separate processes, so everything above still holds: a crashing
+script only marks its camera offline and shows its error in the log. A
+USB webcam (source `0`, `1`, ...) gets one script at a time, because
+Windows lets only one process open it. They can also still be started
+by hand from a terminal.
 
 They talk to the backend the same way the dashboard does: authenticated
 REST calls (`backend/app/ai/prototypes/backend_client.py` -- login once,
@@ -92,6 +110,62 @@ Camera health follows the same path: `camera_health.py` posts
 the status actually changes; the script also raises `CAMERA_OFFLINE` /
 `CAMERA_ONLINE` alerts on transitions.
 
+## Live view
+
+The backend never opens a camera itself (a USB webcam can only be opened
+by one process, and that's the AI script). Instead, every script run with
+`--camera-id` hands its annotated frame (boxes, track IDs, names, ROI zone)
+to `backend_client.py`, whose background thread downscales it to 640 px,
+encodes a JPEG and posts it to `POST /cameras/{id}/frame` about 5 times a
+second (`--stream-fps`). The backend keeps only the latest frame per
+camera in memory (`services/frame_store.py`), never on disk.
+
+The dashboard's Live View page opens one `/ws/stream` WebSocket, subscribes
+to every camera, and gets each new frame as a binary message (camera ID +
+JPEG). One socket for all cameras matters: browsers allow ~6 HTTP
+connections per host, so one MJPEG stream per camera would starve the
+dashboard's API calls. A tile shows "No live feed" until a script streams
+that camera, and "Feed stopped" if frames stop for 5 s.
+
+If several scripts run on one IP camera, one owns the view: a detection
+script (priority 1) wins over `camera_health` (priority 0, raw frames),
+and between equals the first keeps it until it's silent for 3 s.
+
+## Evidence images
+
+When a script raises an alert, `backend_client.py` attaches the next 3
+annotated frames, one per second (`--evidence-frames`,
+`--evidence-interval`), via `POST /alerts/{id}/images`. The backend
+re-encodes each upload to JPEG (which also strips metadata), stores it
+under `MEDIA_DIR/evidence/` with a generated file name, and broadcasts
+`alert_image` so open Alerts/Incidents pages add the thumbnail live. An
+incident shows the evidence of the alert it was promoted from.
+
+Retention (proposal: "configurable retention"): images older than
+`EVIDENCE_RETENTION_DAYS` (default 30) are deleted at startup and every 6
+hours, along with files whose alert no longer exists.
+
+## Face registration and recognition
+
+1. An admin registers a person on the Registered People page (name plus a
+   consent checkbox), then adds 3-5 face photos by upload or the browser
+   camera.
+2. `POST /people/{id}/faces` runs InsightFace (`buffalo_l`, the same model
+   the recognizer uses) in the backend. The photo must contain exactly one
+   face. If none is found, the encoder retries with a border around the
+   image, because the detector misses tightly cropped passport-style
+   photos. The 512-d embedding goes into `face_embeddings` and a cropped
+   thumbnail into `MEDIA_DIR/faces/`.
+3. `face_recognition.py --camera-id N` downloads every active person's
+   embeddings (`GET /face-embeddings`) and refreshes them every 30 s, so
+   new registrations work without a restart. A face matches the person
+   whose best sample scores highest, if that score reaches the camera's
+   `face_match_threshold` (Settings page); otherwise it's "Unknown".
+4. A match is reported via `POST /people/{id}/sightings` (at most every
+   10 s per person), which updates the person's "last seen" camera and
+   time on the People page live. Unknown faces raise `UNKNOWN_FACE` alerts
+   with evidence. The names are also drawn on the live view.
+
 ## Request handling
 
 Route handlers are plain (sync) `def` functions because SQLAlchemy here
@@ -112,6 +186,11 @@ accounts). The restriction is enforced server-side in the dependency,
 not just hidden in the UI -- a `security_operator` token gets a real
 `403` from the API for an admin-only route.
 
+The AI scripts log in as `ai_service`, a service-account role. Face data
+is the most restricted: face photos and thumbnails are admin-only, and
+face embeddings can be read only by `admin` and `ai_service`, never by a
+security operator.
+
 The WebSocket handshake also checks that the token's user still exists
 and is active. In the dashboard, any `401` clears the stored token and
 returns the user to the sign-in page (`UNAUTHORIZED_EVENT` in
@@ -122,17 +201,20 @@ response.
 
 ## Known constraints
 
-- Single-process `ConnectionManager` (`app/services/ws_manager.py`):
-  WebSocket broadcast is in-memory, so it only works correctly with a
-  single backend process. A production multi-worker deployment would
-  need a pub/sub backend (e.g. Redis) instead -- out of scope for this
-  FYP's single-instance mock-environment demo.
-- Face embeddings are stored in a gitignored local pickle file
-  (`backend/app/ai/prototypes/face_db/embeddings.pkl`), not the
-  `face_embeddings` DB table yet -- the table exists in the schema but
-  `face_recognition.py` doesn't write to it yet. So the dashboard's
-  Registered People list (consent records) and the faces the script can
-  actually recognize are kept in step by hand for now.
+- Single-process state: the WebSocket broadcast (`ws_manager.py`), the
+  live frames (`frame_store.py`) and the monitoring runners
+  (`camera_runner.py`) are in memory, so they only work with a single
+  backend process. Monitoring doesn't survive an API restart; start it
+  again from the dashboard. A multi-worker deployment would need a
+  pub/sub broker (e.g. Redis) -- out of scope for this FYP's
+  single-instance mock-environment demo.
+- Face recognition is CPU-bound: about 1 frame per second with one face
+  on the team's laptop, slower with several faces in view, so its live
+  view updates slowly. Detection-only scripts run ~4-6 FPS.
+- `face_recognition.py --register` (without `--camera-id`) still writes the
+  old local `face_db/embeddings.pkl` for standalone experiments; faces
+  registered that way are not visible to the dashboard or to the
+  backend-wired recognizer.
 - Detection scripts read their thresholds once at startup; changing
   Settings needs a script restart to take effect.
 - Use `127.0.0.1`, not `localhost`, for the API base URL in local dev on

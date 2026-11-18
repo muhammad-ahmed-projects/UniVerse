@@ -24,7 +24,9 @@ real-time dashboard with incident management.
 - **Auth:** Role-based access control (admin / security operator)
 
 ## Getting Started
-See [`docs/setup.md`](docs/setup.md) (fresh clone to running),
+**New to the project? Start with [`docs/setup.md`](docs/setup.md)**: a
+step-by-step guide from a fresh Windows PC to a running dashboard, AI
+scripts, and IP cameras, with a troubleshooting table. Also see
 [`docs/architecture.md`](docs/architecture.md), and
 [`docs/api-reference.md`](docs/api-reference.md).
 

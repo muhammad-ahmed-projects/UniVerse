@@ -11,6 +11,11 @@ Auth: every route except `POST /auth/login` requires
 pass it on every subsequent call. Admin-only routes return `403` for a
 non-admin token.
 
+Roles: `admin`, `security_operator`, and `ai_service` (the AI scripts'
+service account). In the tables below, "any" means any logged-in user.
+Face data is the exception to "operators can read everything": face photos
+are admin-only, and embeddings are admin or `ai_service` only.
+
 ## Auth
 
 | Method | Path | Auth | Notes |
@@ -39,8 +44,15 @@ curl -X POST http://127.0.0.1:8000/auth/register \
 | PUT | `/cameras/{id}` | admin | Partial update. Broadcasts `camera_status` over WS if `status` changes. |
 | DELETE | `/cameras/{id}` | admin | 204 on success. |
 | POST | `/cameras/{id}/heartbeat` | any | `{status: "online" \| "offline"}` from `camera_health.py`. Updates `status` (and `last_seen_at` when online); broadcasts `camera_status` only when the status changes. |
-| GET | `/cameras/{id}/settings` | any | Returns ROI/loiter/tamper thresholds; creates a default row on first read. |
-| PUT | `/cameras/{id}/settings` | admin | Upserts all 9 threshold fields (see `camera_settings` schema). ROI validated so `x1<x2` and `y1<y2`. |
+| GET | `/cameras/{id}/settings` | any | Returns ROI/loiter/tamper/face thresholds; creates a default row on first read. |
+| PUT | `/cameras/{id}/settings` | admin | Upserts all 10 threshold fields (see `camera_settings` schema). ROI validated so `x1<x2` and `y1<y2`; `face_match_threshold` must be 0.2-0.9. |
+| POST | `/cameras/{id}/frame?source=<script>&priority=<0-9>` | any | Live-view frame from an AI script. Body is the raw JPEG with `Content-Type: image/jpeg` (else 415), at most 1 MB (else 413), must start with JPEG magic bytes (else 422). 204 on success. 409 if another script owns this camera's live view: a higher `priority` takes over (detection scripts send 1, `camera_health` 0); between equals the first one keeps it until it has been silent for 3 s. Frames are held in memory only, never stored. |
+
+`PUT /cameras/{id}` rejects a `stream_source` containing `:***@` (the
+masked form the API returns) with 422, so saving an edit form unchanged
+can't overwrite the real password. `DELETE /cameras/{id}` stops the
+camera's monitoring first; the database cascade also deletes its alerts,
+incidents and settings.
 
 ```sh
 curl http://127.0.0.1:8000/cameras -H "Authorization: Bearer <token>"
@@ -54,25 +66,59 @@ curl -X POST http://127.0.0.1:8000/cameras \
 
 Credentials embedded in `stream_source` (`rtsp://user:pass@host/...`) are
 stored as given but always returned masked (`rtsp://user:***@host/...`).
-The AI scripts receive the real source through their `--source` flag, so
-the API never needs to hand the password back out.
+The AI scripts receive the real source through their `--source` flag (the
+monitoring runner reads it from the database server-side), so the API
+never needs to hand the password back out.
 
-## People (registered faces -- consent records)
+## Monitoring (start/stop a camera's AI scripts)
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/people` | any | List. |
+| GET | `/camera-runners` | any | Monitoring state of every camera started since the API started. |
+| GET | `/cameras/{id}/runner` | any | `{camera_id, running, is_webcam, scripts: [{name, pid, running, exit_code, stopped_by_user, started_at}], log: [last 200 output lines]}`. |
+| POST | `/cameras/{id}/runner` | admin | `{scripts: [...]}` from `roi_loitering`, `face_recognition`, `tamper_detection`, `camera_health` (unique, at least one; else 422). Starts each as `python -m app.ai.prototypes.<script> --source <camera's stream_source> --camera-id <id> --headless`. 409 if already running, or if the source is a webcam index and more than one script was chosen. Broadcasts `camera_runner`. |
+| DELETE | `/cameras/{id}/runner` | admin | Stops the scripts, sets the camera's status to `unknown`, broadcasts `camera_runner` (and `camera_status` if it changed). |
+
+If every script of a camera exits on its own (crash, camera can't be
+opened, video file ended), the camera's status becomes `offline` and
+`camera_runner` + `camera_status` are broadcast. Passwords in RTSP URLs
+are masked in the log. Runners live in the API process and stop with it.
+
+```sh
+curl -X POST http://127.0.0.1:8000/cameras/1/runner \
+  -H "Authorization: Bearer <admin_token>" -H "Content-Type: application/json" \
+  -d '{"scripts": ["roi_loitering"]}'
+```
+
+## People (registered faces)
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/people` | any | List. Each person has `face_count`, `last_seen_at`, `last_seen_camera_id`. |
 | GET | `/people/{id}` | any | 404 if missing. |
-| POST | `/people` | admin | `{name, notes?}`. Creates the consent record only -- the actual face embedding is registered separately via `python -m app.ai.prototypes.face_recognition --register`. |
-| DELETE | `/people/{id}` | admin | 204 on success. |
+| POST | `/people` | admin | `{name, notes?}`. The consent record; add face photos next. |
+| DELETE | `/people/{id}` | admin | 204. Also deletes the person's face samples and their thumbnail files. |
+| POST | `/people/{id}/faces` | admin | Multipart, field `file`: one photo (JPEG/PNG/WebP/BMP, max 5 MB). The server runs InsightFace on it and stores the 512-d embedding plus a cropped thumbnail. 422 if no face, more than one face (`Found N faces...`), or a face under 60 px wide; 409 after 20 photos. The first call loads the model (several seconds). Returns `{id, person_id, created_at}`; the embedding is never returned here. |
+| GET | `/people/{id}/faces` | admin | The person's face samples (metadata). |
+| GET | `/people/{id}/faces/{face_id}/image` | admin | Cropped face thumbnail (JPEG, `Cache-Control: no-store`). |
+| DELETE | `/people/{id}/faces/{face_id}` | admin | 204. Deletes the sample and its thumbnail. |
+| POST | `/people/{id}/sightings` | admin, ai_service | `{camera_id, similarity}` from `face_recognition.py` when it recognizes this person. Sets `last_seen_at`/`last_seen_camera_id` and broadcasts `person_seen`. 400 for an unknown camera. |
+| GET | `/face-embeddings` | admin, ai_service | `[{person_id, name, embedding}]` for every face sample of every active person; what `face_recognition.py` matches against. Operators get 403. |
+
+```sh
+curl -X POST http://127.0.0.1:8000/people/3/faces \
+  -H "Authorization: Bearer <admin_token>" -F "file=@front.jpg"
+```
 
 ## Alerts (raw AI-generated events)
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/alerts` | any | Newest first. Query params: `camera_id`, `unresolved_only` (bool), `limit` (1-500, default 100), `offset`. |
+| GET | `/alerts` | any | Newest first. Query params: `camera_id`, `unresolved_only` (bool), `limit` (1-500, default 100), `offset`. Each alert includes `images: [{id, alert_id, captured_at}]`. |
 | GET | `/alerts/{id}` | any | 404 if missing. |
 | POST | `/alerts` | any | Creates an alert, broadcasts `{"type": "alert", ...}` over WS. This is what the AI scripts call via `backend_client.py`. |
+| POST | `/alerts/{id}/images` | any | Multipart, field `file`: an evidence snapshot (max 5 MB, re-encoded to JPEG). 201 with the image metadata; broadcasts `alert_image`. 409 after 10 images per alert, 422 if not an image. The AI scripts send 3 frames per alert by default (at 0 s, 1 s, 2 s). |
+| GET | `/alerts/{id}/images/{image_id}` | any | The evidence JPEG. 404 if the image belongs to another alert. |
 
 ```sh
 curl -X POST http://127.0.0.1:8000/alerts \
@@ -86,6 +132,10 @@ Alert types emitted by the AI scripts: `ROI_ENTRY`, `LOITERING`,
 `TAMPER_COVERED`, `TAMPER_MOVED`, `TAMPER_DEFOCUSED`, `CAMERA_OFFLINE`,
 `CAMERA_ONLINE`, `UNKNOWN_FACE`.
 
+Evidence images older than `EVIDENCE_RETENTION_DAYS` (env, default 30;
+`0` keeps them forever) are deleted automatically at startup and every 6
+hours, together with any files whose alert no longer exists.
+
 ## Incidents (human-reviewed)
 
 | Method | Path | Auth | Notes |
@@ -95,6 +145,9 @@ Alert types emitted by the AI scripts: `ROI_ENTRY`, `LOITERING`,
 | POST | `/incidents` | any | Promotes an alert to an incident. `{camera_id, title, description?, priority?, source_alert_id?}`. 400 if `source_alert_id` doesn't exist, belongs to a different camera, or is already linked to an incident. Broadcasts `incident_update`. |
 | PATCH | `/incidents/{id}/acknowledge` | any | 400 if not currently `open`. Broadcasts `incident_update`. |
 | PATCH | `/incidents/{id}/resolve` | any | 400 unless currently `acknowledged`. Broadcasts `incident_update`. |
+
+Each incident includes `images`: the evidence of the alert it was promoted
+from (images that arrive after promotion show up too).
 
 Status machine, enforced server-side: `open -> acknowledged -> resolved`.
 Resolving requires acknowledging first, and neither step can be repeated.
@@ -111,7 +164,8 @@ the same alert or incident at once can't both succeed.
 
 | Path | Auth | Notes |
 |---|---|---|
-| `ws://127.0.0.1:8000/ws/alerts?token=<jwt>` | JWT in query param | Rejected with `403` at handshake on an invalid/missing token or a deactivated/deleted user. Broadcasts 3 message types: `alert`, `camera_status`, `incident_update`. Client doesn't need to send anything after connecting. |
+| `ws://127.0.0.1:8000/ws/alerts?token=<jwt>` | JWT in query param | Rejected with `403` at handshake on an invalid/missing token or a deactivated/deleted user. Broadcasts 6 JSON message types: `alert`, `camera_status`, `incident_update`, `alert_image` (`{alert_id, incident_id, image}`), `person_seen` (`{person_id, camera_id, similarity, seen_at}`), `camera_runner` (`{camera_id, running}`). Client doesn't need to send anything after connecting. |
+| `ws://127.0.0.1:8000/ws/stream?token=<jwt>` | JWT in query param | Live camera frames. Send `{"subscribe": [1, 2]}` (replaces the previous list; at most 64 IDs). Each binary message is a 4-byte big-endian camera ID followed by one JPEG; a new subscriber gets each camera's current frame right away. Only the latest frame is kept, so a slow client skips frames instead of lagging. One socket carries all cameras, because browsers allow only ~6 HTTP connections per host. |
 
 ## Health
 

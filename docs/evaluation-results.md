@@ -664,3 +664,164 @@ written.
 during the run) and `CAMERA_ONLINE` after a real unplug/replug. The code
 path for both is the same `post_alert` call already verified for other
 alert types.
+
+## Live View, evidence images, dashboard face registration (2026-11-18)
+
+Three features the team asked for: every camera's live feed on the
+dashboard, photos attached to each alert/incident, and registering a
+person's face from the dashboard instead of the command line. Design and
+data flow are in `/docs/architecture.md` ("Live view", "Evidence images",
+"Face registration and recognition").
+
+**Schema:** migration `b3c1d9e4f2a7` adds `alert_images`,
+`face_embeddings.image_file`, `people.last_seen_at`/`last_seen_camera_id`,
+`camera_settings.face_match_threshold` and the `AI_SERVICE` user role, and
+drops the never-used `alerts.evidence_path`. Verified on a throwaway
+database: upgrade, seed, downgrade, upgrade again, seed again, and
+`alembic check` (no drift) all succeed. The seed now also creates the
+`ai_service` account the AI scripts log in with.
+
+**Backend tests (pytest):** 51/51 pass (28 existing + 23 new).
+- Live frames: frame reaches a subscribed `/ws/stream` viewer; a new
+  viewer gets the current frame immediately; wrong content type (415),
+  oversize (413), non-JPEG (422), unknown camera (404), bad `source`
+  (422), no token (401); a second script can't take over a live camera
+  (409) until the first goes quiet; a detection script takes over from
+  `camera_health`, not the other way round; malformed subscribe messages
+  don't break the socket; bad WebSocket token rejected.
+- Evidence: upload, list (on alerts and on the promoted incident,
+  including images that arrive after promotion), download, `alert_image`
+  broadcast; invalid/empty image (422), unknown alert (404), no token
+  (401), 10-image cap (409), image requested under the wrong alert (404);
+  retention deletes expired rows and files plus orphaned files, keeps
+  recent orphans (an upload may be mid-commit), and keeps everything when
+  set to 0 days.
+- Faces (with a fake encoder, so tests don't load the model): register
+  end to end; no face / several faces / too-small face rejected with a
+  clear message; non-image and unknown person rejected; photos and
+  thumbnails admin-only (operator and ai_service get 403); embeddings
+  readable by admin and ai_service, not operator; deleting a sample or a
+  person removes the thumbnail files; inactive people aren't matched;
+  sightings update "last seen", broadcast `person_seen`, validate camera
+  and similarity, and are refused for operators.
+- Settings: `face_match_threshold` default 0.45, saved and re-read, and
+  values outside 0.2-0.9 rejected.
+
+**Real face model through the API** (InsightFace buffalo_l, script in the
+session scratchpad): 11/11 checks pass.
+- A 6-person group photo is rejected: "Found 6 faces in the photo" (first
+  call 9-13 s including model load).
+- A tightly cropped 112x112 face photo was first rejected ("No face
+  found"): the detector needs some context around a face. **Fixed**: the
+  encoder now retries with a border around the image, and the same photo
+  is accepted. A JPEG thumbnail is served, and `ai_service` sees the
+  512-d embedding while the operator gets 403.
+- `face_recognition.py --camera-id 1` on a test video (registered face,
+  then a group of unregistered faces): the registered person's "last
+  seen" is set to camera 1, `UNKNOWN_FACE` alerts are raised with evidence
+  images (annotated "Unknown" boxes), live frames reach `/ws/stream`, and
+  the script exits cleanly.
+- **Performance (CPU only):** about 1.0 FPS with one face in view and
+  0.4 FPS with six faces. Face recognition is the slowest script; its live
+  view updates accordingly.
+
+**Dashboard E2E (headless Chrome, real webcam):** 27/27 checks pass, no
+console errors.
+- Live View: a tile per camera, "No live feed" before any script runs;
+  with `roi_loitering.py --source 0 --camera-id 1` running, camera 1 shows
+  the real webcam (640 px frames with the ROI box) with a LIVE label, the
+  image keeps updating, camera 2 stays "No live feed", the tile opens a
+  large view, and the tile switches to "Feed stopped" after the script
+  exits.
+- Evidence: the webcam run raised a real `LOITERING` alert, and its 3
+  evidence photos appeared as thumbnails; the viewer opens full size and
+  pages between images. Promoting the alert gives the incident the same
+  evidence.
+- Face registration: Next stays disabled until the consent box is
+  ticked, registration goes straight to the photos step, an uploaded
+  single-face photo is accepted with a thumbnail, the group photo is
+  rejected with "Found 6 faces", the browser camera preview starts (Chrome
+  fake camera) and a captured photo is sent and checked ("No face found",
+  correct for the fake camera's test pattern), the table shows "1 photo",
+  the camera is released when the dialog closes, and removing the person
+  deletes their photos.
+- Settings shows the new Face Recognition > Match threshold field.
+- Regression: the earlier 30-check audit E2E still passes 30/30 (updated
+  for the new consent step).
+
+**Not verified yet (needs the team):** recognizing a real team member
+live from photos registered on the dashboard. The test used InsightFace's
+sample photos, not a live person. This is the same blocker as the face
+recognition item in Section 12 (3+ registered team members).
+
+## Camera monitoring from the dashboard, camera edit/delete (2026-11-18)
+
+Before this, a camera only went online when someone started an AI script
+in a terminal, and the dashboard had no way to edit or delete a camera.
+Now an admin opens **Monitoring** on a camera (Cameras page or a Live
+View tile), picks the analyses, and the API launches them as separate
+processes (`services/camera_runner.py`). The dialog shows the live video,
+what is running, and the scripts' output. Every script now reports the
+camera online while frames flow. Design: `/docs/architecture.md`.
+
+**Backend tests:** 59/59 pass (51 + 8 new, using tiny fake processes so
+tests never load a model or open a camera):
+- Start, then watch the output arrive in the log, then list, then stop:
+  the camera becomes `unknown` and the script is marked
+  `stopped_by_user`.
+- A webcam source refuses two analyses (409). An IP camera runs two; a
+  second start while running is refused (409). The RTSP password is
+  masked in the log.
+- Start/stop is admin-only (operator 403); viewing is allowed.
+- Validation: empty list, unknown script name, and duplicates give 422;
+  an unknown camera gives 404.
+- A script that dies on its own (exit 3, "Could not open source")
+  broadcasts `camera_runner` + `camera_status: offline` and keeps its
+  exit code and log.
+- Deleting a camera kills its processes.
+- `PUT /cameras/{id}` rejects a masked (`:***@`) stream source, so an
+  unchanged edit form can't overwrite the real password.
+
+**Dashboard E2E (headless Chrome, real webcam + real YOLO):** 30/30
+checks pass, no console errors.
+- Camera rows have Monitoring/Edit/Delete. For the webcam camera,
+  people/ROI is preselected and only one analysis can be ticked.
+- Start: a toast confirms it, script output appears ("Loaded settings
+  from backend for camera 1", then a real `ROI_ENTRY` alert line), and
+  the live video shows inside the dialog. The camera turns **online** by
+  itself, and the table shows "running · People, restricted area &
+  loitering". The Live View tile is live with a running badge, and
+  clicking it opens the same dialog.
+- Stop: a toast confirms it, the dialog offers Start again, and the
+  camera status becomes `unknown`.
+- A camera with source `99` (no such webcam) shows "stopped with error".
+  The output ends with `RuntimeError: Could not open video source: 99`,
+  and the camera is marked offline.
+- Edit renames a camera. An IP camera's password is masked in the table,
+  and editing only its location leaves the real password intact
+  (checked in the database). Delete (with a warning that alerts,
+  incidents and evidence go too) removes both test cameras.
+- An operator has no Add/Edit/Delete and sees monitoring read-only.
+- Bug found and fixed during the run: two dialogs on the Cameras page
+  shared a React `key`, which React reported as a console error and which
+  broke the operator's dialog.
+- Regression: the Live View/evidence/faces E2E (27/27) and the audit E2E
+  (30/30) still pass.
+
+**Setup guide verified from a fresh clone** (`/docs/setup.md`, run by a
+script against a throwaway database):
+- `py -3.12 -m venv`, `pip install -r requirements-dev.txt` (~10 min).
+- `alembic upgrade head` to `b3c1d9e4f2a7`; the seed script, twice, with
+  no duplicates.
+- API health, login, and `ai_service` reading face embeddings.
+- `yolov8n.pt` downloaded automatically on first run.
+- `pytest` 51/51 at that commit and ruff clean. Frontend: `npm install`,
+  build and lint pass.
+
+The first attempt failed. `pip install` stopped with `OSError: [Errno 2]
+No such file or directory: '...\torch\include\...'`, because PyTorch's
+file paths exceeded Windows' 260-character limit under a deep folder. The
+guide now says to clone into a short path such as `D:\UniVerse`, shows
+how to enable long paths, and has a troubleshooting row for the error.
+It also covers machines where the `py` launcher isn't on PATH (found on
+this machine).
