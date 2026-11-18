@@ -9,9 +9,9 @@ Runs standalone with CLI flags by default:
     python -m app.ai.prototypes.tamper_detection --source 0
 
 Or wired to the backend (reads thresholds from camera_settings, writes
-real alerts via POST /alerts instead of only printing):
-    python -m app.ai.prototypes.tamper_detection --source 0 --camera-id 1 \
-        --api-username operator --api-password operator123
+real alerts with evidence images, and streams the feed to the dashboard's
+Live View; credentials from UNIVERSE_API_USERNAME/PASSWORD):
+    python -m app.ai.prototypes.tamper_detection --source 0 --camera-id 1
 """
 
 import argparse
@@ -54,9 +54,9 @@ def classify_state(
 
 
 def run(args: argparse.Namespace) -> None:
-    client = build_client(args)
+    client = build_client(args, "tamper_detection")
     if client is not None:
-        settings = client.get_camera_settings(args.camera_id)
+        settings = client.get_camera_settings()
         args.motion_threshold = settings["tamper_motion_threshold"]
         args.covered_brightness_ratio = settings["tamper_covered_brightness_ratio"]
         args.covered_sharpness_ratio = settings["tamper_covered_sharpness_ratio"]
@@ -103,7 +103,6 @@ def run(args: argparse.Namespace) -> None:
             print(f"[frame {frame_idx}] TAMPER STATE CHANGE: {current_state} -> {new_state}")
             if client is not None and new_state != "normal":
                 client.post_alert(
-                    args.camera_id,
                     f"TAMPER_{new_state.upper()}",
                     "high",
                     f"Camera tamper detected: {current_state} -> {new_state}",
@@ -126,6 +125,9 @@ def run(args: argparse.Namespace) -> None:
             1,
         )
 
+        if client is not None:
+            client.publish_frame(frame)
+
         if out_dir and frame_idx % args.frame_sample_every == 0:
             cv2.imwrite(str(out_dir / f"frame_{frame_idx:04d}.png"), frame)
 
@@ -146,6 +148,8 @@ def run(args: argparse.Namespace) -> None:
         print(" -", e)
 
     cap.release()
+    if client is not None:
+        client.close()
     if not args.headless:
         cv2.destroyAllWindows()
 

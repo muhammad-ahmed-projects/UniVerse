@@ -12,7 +12,9 @@ Standalone (console only):
 
 Wired to the backend (reports status via POST /cameras/{id}/heartbeat,
 which updates the dashboard live, and raises CAMERA_OFFLINE /
-CAMERA_ONLINE alerts on transitions):
+CAMERA_ONLINE alerts on transitions). It also streams the raw feed to the
+dashboard's Live View at low priority, so a detection script running on
+the same camera (whose frames carry boxes and names) takes the view over:
     python -m app.ai.prototypes.camera_health --source 0 --camera-id 1
 
 Note: a USB webcam can only be opened by one process at a time on
@@ -34,7 +36,6 @@ def open_capture(source: str) -> cv2.VideoCapture:
 
 def report(
     client: BackendClient | None,
-    camera_id: int | None,
     old: str | None,
     new: str,
     elapsed: float,
@@ -44,25 +45,30 @@ def report(
         "" if new == "online" else f" (no frame for over {timeout}s)" if old == "online" else " (could not open source)"
     )
     print(f"[t={elapsed:.1f}s] camera status: {new.upper() if new == 'offline' else new}{reason}")
-    if client is None or camera_id is None:
+    if client is None:
         return
-    client.heartbeat(camera_id, new)
+    client.heartbeat(new)
+    # No evidence images: there's no frame while offline, and "restored" needs none.
     if new == "offline":
         client.post_alert(
-            camera_id, "CAMERA_OFFLINE", "high", f"Camera went offline{reason}", extra_data={"previous_status": old}
+            "CAMERA_OFFLINE",
+            "high",
+            f"Camera went offline{reason}",
+            extra_data={"previous_status": old},
+            evidence=False,
         )
     elif old == "offline":
         client.post_alert(
-            camera_id, "CAMERA_ONLINE", "low", "Camera feed restored", extra_data={"previous_status": old}
+            "CAMERA_ONLINE", "low", "Camera feed restored", extra_data={"previous_status": old}, evidence=False
         )
 
 
 def run(args: argparse.Namespace) -> None:
-    client = build_client(args)
+    client = build_client(args, "camera_health", stream_priority=0)
     t_start = time.time()
     cap = open_capture(args.source)
     status = "online" if cap.isOpened() else "offline"
-    report(client, args.camera_id, None, status, 0.0, args.timeout)
+    report(client, None, status, 0.0, args.timeout)
 
     last_ok_time = t_start
     last_retry_time = t_start
@@ -75,16 +81,18 @@ def run(args: argparse.Namespace) -> None:
 
         if ok:
             last_ok_time = now
+            if client is not None:
+                client.publish_frame(frame)
             if status != "online":
-                report(client, args.camera_id, status, "online", now - t_start, args.timeout)
+                report(client, status, "online", now - t_start, args.timeout)
                 status = "online"
             elif client is not None and now - last_heartbeat_time >= args.heartbeat_seconds:
                 # Periodic heartbeat keeps cameras.last_seen_at fresh while online.
-                client.heartbeat(args.camera_id, "online")
+                client.heartbeat("online")
                 last_heartbeat_time = now
         else:
             if status != "offline" and now - last_ok_time > args.timeout:
-                report(client, args.camera_id, status, "offline", now - t_start, args.timeout)
+                report(client, status, "offline", now - t_start, args.timeout)
                 status = "offline"
             if status == "offline" and args.retry_seconds > 0 and now - last_retry_time >= args.retry_seconds:
                 cap.release()
@@ -105,6 +113,8 @@ def run(args: argparse.Namespace) -> None:
             break
 
     cap.release()
+    if client is not None:
+        client.close()
     if not args.headless:
         cv2.destroyAllWindows()
 

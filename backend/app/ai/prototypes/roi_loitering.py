@@ -8,9 +8,9 @@ Runs standalone with CLI flags by default:
     python -m app.ai.prototypes.roi_loitering --source 0 --roi 0.3,0.2,0.9,1.0
 
 Or wired to the backend (reads roi/loiter_seconds from camera_settings,
-writes real alerts via POST /alerts instead of only printing):
-    python -m app.ai.prototypes.roi_loitering --source 0 --camera-id 1 \
-        --api-username operator --api-password operator123
+writes real alerts with evidence images, and streams the annotated feed to
+the dashboard's Live View; credentials from UNIVERSE_API_USERNAME/PASSWORD):
+    python -m app.ai.prototypes.roi_loitering --source 0 --camera-id 1
 """
 
 import argparse
@@ -42,11 +42,11 @@ def point_in_roi(point: tuple[int, int], roi: Roi) -> bool:
 
 
 def run(args: argparse.Namespace) -> None:
-    client = build_client(args)
+    client = build_client(args, "roi_loitering")
     loiter_seconds = args.loiter_seconds
     roi_str = args.roi
     if client is not None:
-        settings = client.get_camera_settings(args.camera_id)
+        settings = client.get_camera_settings()
         roi_str = f"{settings['roi_x1']},{settings['roi_y1']},{settings['roi_x2']},{settings['roi_y2']}"
         loiter_seconds = settings["loiter_seconds"]
         print(
@@ -106,7 +106,6 @@ def run(args: argparse.Namespace) -> None:
                     print(f"[frame {frame_idx}] ALERT: ID {tid} entered restricted area")
                     if client is not None:
                         client.post_alert(
-                            args.camera_id,
                             "ROI_ENTRY",
                             "medium",
                             f"Person (track {tid}) entered restricted area",
@@ -125,7 +124,6 @@ def run(args: argparse.Namespace) -> None:
                         print(f"[frame {frame_idx}] ALERT: ID {tid} loitering for {duration:.1f}s")
                         if client is not None:
                             client.post_alert(
-                                args.camera_id,
                                 "LOITERING",
                                 "high",
                                 f"Person (track {tid}) loitering for {duration:.1f}s",
@@ -134,6 +132,9 @@ def run(args: argparse.Namespace) -> None:
                         state["loiter_alerted"] = True
 
                 state["inside"] = inside
+
+        if client is not None:
+            client.publish_frame(frame)
 
         if out_dir and frame_idx % args.frame_sample_every == 0:
             cv2.imwrite(str(out_dir / f"frame_{frame_idx:04d}.png"), frame)
@@ -154,6 +155,8 @@ def run(args: argparse.Namespace) -> None:
         print(" -", a)
 
     cap.release()
+    if client is not None:
+        client.close()
     if not args.headless:
         cv2.destroyAllWindows()
 
