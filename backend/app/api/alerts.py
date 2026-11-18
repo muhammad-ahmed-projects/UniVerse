@@ -1,14 +1,20 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.alert import Alert
+from app.models.alert import Alert, AlertImage
 from app.models.camera import Camera
-from app.schemas.alert import AlertCreate, AlertOut
+from app.schemas.alert import AlertCreate, AlertImageOut, AlertOut
+from app.services import images, media_store
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+
+# An alert's evidence is a short burst (the AI scripts send 3 frames by
+# default); the cap stops a misbehaving client from filling the disk.
+MAX_IMAGES_PER_ALERT = 10
 
 
 @router.get("", response_model=list[AlertOut], dependencies=[Depends(get_current_user)])
@@ -67,3 +73,64 @@ def create_alert(
         },
     )
     return alert
+
+
+@router.post(
+    "/{alert_id}/images",
+    response_model=AlertImageOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(get_current_user)],
+)
+def upload_alert_image(
+    alert_id: int,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> AlertImage:
+    """Attach an evidence snapshot to an alert (sent by the AI scripts right
+    after they raise the alert)."""
+    # Row lock so concurrent uploads can't race past MAX_IMAGES_PER_ALERT.
+    alert = db.query(Alert).filter(Alert.id == alert_id).with_for_update().first()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    if len(alert.images) >= MAX_IMAGES_PER_ALERT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An alert can have at most {MAX_IMAGES_PER_ALERT} images",
+        )
+
+    jpeg = images.encode_jpeg(images.decode(images.read_upload(file)))
+    file_name = media_store.save("evidence", jpeg)
+    image = AlertImage(alert_id=alert.id, file_name=file_name)
+    db.add(image)
+    try:
+        db.commit()
+    except Exception:
+        media_store.delete("evidence", file_name)
+        raise
+    db.refresh(image)
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "type": "alert_image",
+            "alert_id": alert.id,
+            "incident_id": alert.incident_id,
+            "image": AlertImageOut.model_validate(image).model_dump(mode="json"),
+        },
+    )
+    return image
+
+
+@router.get(
+    "/{alert_id}/images/{image_id}",
+    response_class=FileResponse,
+    dependencies=[Depends(get_current_user)],
+)
+def get_alert_image(alert_id: int, image_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    image = db.get(AlertImage, image_id)
+    path = media_store.path_for("evidence", image.file_name) if image and image.alert_id == alert_id else None
+    if path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    # Evidence never changes once stored, so the browser may cache it.
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})

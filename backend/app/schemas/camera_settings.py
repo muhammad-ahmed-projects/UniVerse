@@ -11,6 +11,7 @@ class CameraSettingsUpdate(BaseModel):
     tamper_covered_brightness_ratio: float = Field(gt=0, le=1, default=0.4)
     tamper_covered_sharpness_ratio: float = Field(gt=0, le=1, default=0.3)
     tamper_defocus_sharpness_ratio: float = Field(gt=0, le=1, default=0.35)
+    face_match_threshold: float = Field(ge=0.2, le=0.9, default=0.45)
 
     @model_validator(mode="after")
     def check_roi_ordering(self) -> "CameraSettingsUpdate":

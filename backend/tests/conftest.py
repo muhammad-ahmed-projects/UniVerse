@@ -4,6 +4,7 @@ Tables are created once per session and truncated after every test.
 """
 
 import os
+import tempfile
 from collections.abc import Iterator
 
 from dotenv import load_dotenv
@@ -21,6 +22,8 @@ if "test" not in (_test_url.database or ""):
 
 # Must happen before any app module is imported: app.db.session builds its engine at import time.
 os.environ["DATABASE_URL"] = _test_url.render_as_string(hide_password=False)
+# Evidence/face files from tests go to a throwaway dir, never backend/media.
+os.environ["MEDIA_DIR"] = tempfile.mkdtemp(prefix="universe_test_media_")
 
 
 def _ensure_test_database() -> None:
@@ -41,9 +44,11 @@ from app.core.security import hash_password  # noqa: E402
 from app.db.session import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Camera, User, UserRole  # noqa: E402
+from app.services.frame_store import frame_store  # noqa: E402
 
 ADMIN = ("admin_t", "admin-pass-123")
 OPERATOR = ("operator_t", "operator-pass-123")
+AI_SERVICE = ("ai_service_t", "ai-service-pass-123")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -60,11 +65,13 @@ def _clean_tables() -> Iterator[None]:
     tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    frame_store.clear()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def seeded() -> dict[str, int]:
-    """Admin + operator users and one camera."""
+    """Admin, operator and ai_service users, and one camera."""
     with SessionLocal() as db:
         db.add_all(
             [
@@ -74,6 +81,7 @@ def seeded() -> dict[str, int]:
                     hashed_password=hash_password(OPERATOR[1]),
                     role=UserRole.SECURITY_OPERATOR,
                 ),
+                User(username=AI_SERVICE[0], hashed_password=hash_password(AI_SERVICE[1]), role=UserRole.AI_SERVICE),
             ]
         )
         camera = Camera(name="Cam A", stream_source="0")
@@ -102,6 +110,22 @@ def admin_token(client: TestClient, seeded: dict[str, int]) -> str:
 @pytest.fixture
 def operator_token(client: TestClient, seeded: dict[str, int]) -> str:
     return _token(client, OPERATOR)
+
+
+@pytest.fixture
+def ai_service_token(client: TestClient, seeded: dict[str, int]) -> str:
+    return _token(client, AI_SERVICE)
+
+
+def jpeg_bytes(width: int = 320, height: int = 240) -> bytes:
+    """A real (tiny) JPEG for upload tests."""
+    import cv2
+    import numpy as np
+
+    image = np.full((height, width, 3), 128, dtype=np.uint8)
+    ok, buf = cv2.imencode(".jpg", image)
+    assert ok
+    return buf.tobytes()
 
 
 def auth(token: str) -> dict[str, str]:

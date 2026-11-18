@@ -10,6 +10,9 @@ from app.db.session import Base
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     SECURITY_OPERATOR = "security_operator"
+    # Service account for the AI scripts: the only non-admin role that may read
+    # face embeddings (biometric data) and report face sightings.
+    AI_SERVICE = "ai_service"
 
 
 class User(Base):

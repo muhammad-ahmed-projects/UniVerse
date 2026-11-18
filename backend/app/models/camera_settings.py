@@ -31,6 +31,10 @@ class CameraSettings(Base):
     tamper_covered_sharpness_ratio: Mapped[float] = mapped_column(Float, default=0.3, nullable=False)
     tamper_defocus_sharpness_ratio: Mapped[float] = mapped_column(Float, default=0.35, nullable=False)
 
+    # Cosine similarity (0-1) a face must reach against a registered sample to
+    # count as that person; below it the face is "Unknown". Higher = stricter.
+    face_match_threshold: Mapped[float] = mapped_column(Float, default=0.45, nullable=False)
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

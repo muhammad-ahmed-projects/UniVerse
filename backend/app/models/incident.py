@@ -1,9 +1,13 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+
+if TYPE_CHECKING:
+    from app.models.alert import Alert, AlertImage
 
 
 class Incident(Base):
@@ -28,3 +32,11 @@ class Incident(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    # The alert(s) this incident was promoted from (alerts.incident_id).
+    alerts: Mapped[list["Alert"]] = relationship(lazy="selectin", order_by="Alert.id")
+
+    @property
+    def images(self) -> list["AlertImage"]:
+        """Evidence images of every alert linked to this incident."""
+        return [image for alert in self.alerts for image in alert.images]

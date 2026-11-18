@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.alert import Priority
+from app.schemas.alert import AlertImageOut, Priority
 
 IncidentStatus = Literal["open", "acknowledged", "resolved"]
 
@@ -31,3 +31,5 @@ class IncidentOut(BaseModel):
     resolved_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Evidence of the alert(s) this incident was promoted from.
+    images: list[AlertImageOut]

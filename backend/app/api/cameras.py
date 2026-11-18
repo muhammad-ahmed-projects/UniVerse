@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,9 +11,15 @@ from app.models.camera_settings import CameraSettings
 from app.models.user import UserRole
 from app.schemas.camera import CameraCreate, CameraHeartbeat, CameraOut, CameraUpdate
 from app.schemas.camera_settings import CameraSettingsOut, CameraSettingsUpdate
+from app.services.frame_store import frame_store
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
+
+# A downscaled live-view JPEG is ~30-80 KB; 1 MB leaves room for a large
+# frame without letting a client push arbitrary amounts into memory.
+MAX_FRAME_BYTES = 1024 * 1024
+JPEG_MAGIC = b"\xff\xd8\xff"
 
 
 def _get_camera_or_404(camera_id: int, db: Session) -> Camera:
@@ -101,6 +107,46 @@ def camera_heartbeat(
 
 def _status_message(camera: Camera) -> dict:
     return {"type": "camera_status", "camera_id": camera.id, "status": camera.status.value}
+
+
+def _existing_camera_id(camera_id: int, db: Session = Depends(get_db)) -> int:
+    """Sync dependency (runs in the threadpool) so the async frame route below
+    never does blocking DB work on the event loop."""
+    _get_camera_or_404(camera_id, db)
+    return camera_id
+
+
+@router.post(
+    "/{camera_id}/frame",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_user)],
+)
+async def publish_frame(
+    request: Request,
+    camera_id_checked: int = Depends(_existing_camera_id),
+    source: str = Query(default="script", pattern=r"^[a-z0-9_]{1,40}$"),
+    priority: int = Query(default=1, ge=0, le=9),
+) -> Response:
+    """Live-view frame from an AI script: the raw JPEG is the request body
+    (Content-Type: image/jpeg). Dashboards receive it over /ws/stream.
+    `priority`: detection scripts send 1, the health monitor 0 (see FrameStore.publish)."""
+    if request.headers.get("content-type", "").split(";")[0].strip() != "image/jpeg":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Send the frame as image/jpeg")
+
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_FRAME_BYTES:
+            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Frame is larger than 1 MB")
+    if not body.startswith(JPEG_MAGIC):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Body is not a JPEG image")
+
+    if not frame_store.publish(camera_id_checked, bytes(body), source, priority):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Another script is already streaming camera {camera_id_checked}",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete(

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
@@ -21,7 +21,31 @@ class Alert(Base):
     alert_type: Mapped[str] = mapped_column(String(50), nullable=False)
     priority: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
     message: Mapped[str] = mapped_column(String(500), nullable=False)
-    evidence_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     extra_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True)
     triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # selectin: list endpoints load every alert's images in one extra query, not one per alert.
+    images: Mapped[list["AlertImage"]] = relationship(
+        back_populates="alert",
+        lazy="selectin",
+        order_by="AlertImage.id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class AlertImage(Base):
+    """An evidence snapshot for an alert (the annotated camera frame at, and
+    shortly after, the moment the alert fired). The JPEG lives on disk under
+    MEDIA_DIR/evidence/; this row holds only its generated file name.
+    """
+
+    __tablename__ = "alert_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[int] = mapped_column(ForeignKey("alerts.id", ondelete="CASCADE"), index=True, nullable=False)
+    file_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    alert: Mapped[Alert] = relationship(back_populates="images")

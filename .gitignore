@@ -21,6 +21,9 @@ build/
 *.weights
 /backend/app/ai/models/
 
+# Evidence snapshots + face thumbnails (MEDIA_DIR) -- personal data, never commit
+/backend/media/
+
 # Biometric data (face embeddings) -- never commit
 **/face_db/
 *.pkl

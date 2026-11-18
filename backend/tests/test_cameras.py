@@ -42,12 +42,14 @@ def test_settings_defaults_and_update(client: TestClient, admin_token: str, seed
     defaults = client.get(f"/cameras/{cam}/settings", headers=h)
     assert defaults.status_code == 200
     assert defaults.json()["loiter_seconds"] == 5.0
+    assert defaults.json()["face_match_threshold"] == 0.45
 
-    body = {**defaults.json(), "loiter_seconds": 12.5, "roi_x1": 0.1}
+    body = {**defaults.json(), "loiter_seconds": 12.5, "roi_x1": 0.1, "face_match_threshold": 0.6}
     body.pop("camera_id")
     saved = client.put(f"/cameras/{cam}/settings", json=body, headers=h)
     assert saved.status_code == 200
-    assert client.get(f"/cameras/{cam}/settings", headers=h).json()["loiter_seconds"] == 12.5
+    reread = client.get(f"/cameras/{cam}/settings", headers=h).json()
+    assert (reread["loiter_seconds"], reread["face_match_threshold"]) == (12.5, 0.6)
 
 
 def test_settings_validation_and_rbac(
@@ -60,6 +62,9 @@ def test_settings_validation_and_rbac(
         client.put(f"/cameras/{cam}/settings", json={"loiter_seconds": -1}, headers=auth(admin_token)).status_code
         == 422
     )
+    for threshold in (0.1, 0.95):
+        too_far = {"face_match_threshold": threshold}
+        assert client.put(f"/cameras/{cam}/settings", json=too_far, headers=auth(admin_token)).status_code == 422
     assert client.put(f"/cameras/{cam}/settings", json={}, headers=auth(operator_token)).status_code == 403
     assert client.get("/cameras/99999/settings", headers=auth(admin_token)).status_code == 404
 

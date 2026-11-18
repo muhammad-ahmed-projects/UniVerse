@@ -29,6 +29,16 @@ def run() -> None:
                     role=UserRole.SECURITY_OPERATOR,
                 )
             )
+        if not db.query(User).filter_by(username="ai_service").first():
+            # Service account for the AI scripts (UNIVERSE_API_USERNAME in .env).
+            db.add(
+                User(
+                    username="ai_service",
+                    email=None,
+                    hashed_password=hash_password("ai_service123"),
+                    role=UserRole.AI_SERVICE,
+                )
+            )
         if not db.query(Camera).filter_by(name="Test Camera 1").first():
             db.add(
                 Camera(

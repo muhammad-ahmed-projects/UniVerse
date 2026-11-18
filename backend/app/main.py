@@ -1,23 +1,57 @@
+import asyncio
+import contextlib
 import logging
 import os
+from collections.abc import AsyncIterator
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.api.alerts import router as alerts_router
 from app.api.auth import router as auth_router
 from app.api.cameras import router as cameras_router
 from app.api.dashboard import router as dashboard_router
 from app.api.incidents import router as incidents_router
+from app.api.people import embeddings_router
 from app.api.people import router as people_router
 from app.api.ws import router as ws_router
+from app.db.session import SessionLocal
+from app.services import retention
 
 load_dotenv()
 logger = logging.getLogger("universe")
 
-app = FastAPI(title="UniVerse Surveillance API")
+RETENTION_INTERVAL_SECONDS = 6 * 60 * 60
+
+
+def _run_retention() -> None:
+    with SessionLocal() as db:
+        retention.purge(db)
+
+
+async def _retention_loop() -> None:
+    """Evidence retention runs at startup and then every few hours."""
+    while True:
+        try:
+            await run_in_threadpool(_run_retention)
+        except Exception:
+            logger.exception("evidence retention purge failed")
+        await asyncio.sleep(RETENTION_INTERVAL_SECONDS)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    task = asyncio.create_task(_retention_loop())
+    yield
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+app = FastAPI(title="UniVerse Surveillance API", lifespan=lifespan)
 
 # The dashboard is served from a different origin (Vite dev server in development).
 cors_origins = [
@@ -36,6 +70,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(cameras_router)
 app.include_router(people_router)
+app.include_router(embeddings_router)
 app.include_router(alerts_router)
 app.include_router(incidents_router)
 app.include_router(dashboard_router)
