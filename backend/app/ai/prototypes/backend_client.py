@@ -42,6 +42,8 @@ EVIDENCE_JPEG_QUALITY = 85
 STREAM_CONFLICT_BACKOFF_SECONDS = 2.0
 # How long an evidence capture waits for a fresh frame before giving up.
 EVIDENCE_FRAME_WAIT_SECONDS = 3.0
+# While frames flow, refresh the camera's "online" status and last_seen_at this often.
+HEARTBEAT_SECONDS = 10.0
 
 
 def encode_jpeg(frame: np.ndarray, max_width: int, quality: int) -> bytes | None:
@@ -248,6 +250,10 @@ class BackendClient:
         # alert_id -> seq of its last evidence image, so a stalled feed doesn't
         # attach the same frame several times.
         evidence_seq: dict[int, int] = {}
+        # Frames arriving means the camera works: every script (not only
+        # camera_health) keeps its status "online" while it reads frames.
+        last_heartbeat = float("-inf")
+        heartbeat_seq = 0
         while True:
             with self._cond:
                 self._cond.wait(timeout=0.05)
@@ -282,6 +288,18 @@ class BackendClient:
                 next_stream_at = now + 1.0 / self.stream_fps
                 if not self._stream_frame(frame):
                     next_stream_at = now + STREAM_CONFLICT_BACKOFF_SECONDS
+
+            if not self._stopping and seq != heartbeat_seq and now - last_heartbeat >= HEARTBEAT_SECONDS:
+                heartbeat_seq, last_heartbeat = seq, now
+                try:
+                    self._send(
+                        "POST",
+                        f"/cameras/{self.camera_id}/heartbeat",
+                        session=self._worker_session,
+                        json={"status": "online"},
+                    ).raise_for_status()
+                except requests.RequestException as exc:
+                    self._warn("heartbeat", "heartbeat for camera %s failed: %s", self.camera_id, exc)
 
             if done:
                 return

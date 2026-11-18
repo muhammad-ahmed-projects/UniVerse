@@ -4,6 +4,7 @@ Tables are created once per session and truncated after every test.
 """
 
 import os
+import sys
 import tempfile
 from collections.abc import Iterator
 
@@ -44,7 +45,26 @@ from app.core.security import hash_password  # noqa: E402
 from app.db.session import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Camera, User, UserRole  # noqa: E402
+from app.services.camera_runner import camera_runner  # noqa: E402
 from app.services.frame_store import frame_store  # noqa: E402
+
+# Stand-ins for the AI scripts the dashboard can start: tests must never load
+# YOLO/InsightFace or open a real camera. camera_health "fails to open the
+# camera" (exits 3); the others print a line and keep running.
+FAKE_SCRIPT = """
+import sys, time
+name = sys.argv[1]
+print(f"started {name}", flush=True)
+if name == "camera_health":
+    print("RuntimeError: Could not open source", flush=True)
+    sys.exit(3)
+time.sleep(60)
+"""
+
+
+def fake_command(script: str, camera_id: int, source: str) -> list[str]:
+    return [sys.executable, "-u", "-c", FAKE_SCRIPT, script]
+
 
 ADMIN = ("admin_t", "admin-pass-123")
 OPERATOR = ("operator_t", "operator-pass-123")
@@ -61,7 +81,10 @@ def _schema() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def _clean_tables() -> Iterator[None]:
+    camera_runner.command_builder = fake_command
     yield
+    for run in camera_runner.all():
+        camera_runner.forget(run.camera_id)
     tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))

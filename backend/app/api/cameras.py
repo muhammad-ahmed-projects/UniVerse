@@ -11,6 +11,7 @@ from app.models.camera_settings import CameraSettings
 from app.models.user import UserRole
 from app.schemas.camera import CameraCreate, CameraHeartbeat, CameraOut, CameraUpdate
 from app.schemas.camera_settings import CameraSettingsOut, CameraSettingsUpdate
+from app.services.camera_runner import camera_runner
 from app.services.frame_store import frame_store
 from app.services.ws_manager import manager
 
@@ -155,7 +156,11 @@ async def publish_frame(
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 def delete_camera(camera_id: int, db: Session = Depends(get_db)) -> None:
+    """Deletes the camera and, through the database cascade, its alerts,
+    incidents and settings. Any analyses running for it are stopped first."""
     camera = _get_camera_or_404(camera_id, db)
+    camera_runner.forget(camera.id)
+    frame_store.drop(camera.id)
     db.delete(camera)
     db.commit()
 

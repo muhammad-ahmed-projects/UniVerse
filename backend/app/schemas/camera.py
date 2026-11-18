@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from app.models.camera import CameraStatus
 
@@ -18,6 +18,15 @@ class CameraUpdate(BaseModel):
     location: str | None = Field(default=None, max_length=255)
     stream_source: str | None = Field(default=None, min_length=1, max_length=500)
     status: CameraStatus | None = None
+
+    @field_validator("stream_source")
+    @classmethod
+    def _not_masked(cls, value: str | None) -> str | None:
+        # Responses mask the password as "***"; saving that back would
+        # silently replace the real password.
+        if value is not None and ":***@" in value:
+            raise ValueError("retype the full stream URL including its password (the saved one is hidden)")
+        return value
 
 
 class CameraHeartbeat(BaseModel):

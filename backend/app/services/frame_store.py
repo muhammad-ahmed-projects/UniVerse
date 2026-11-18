@@ -73,6 +73,9 @@ class FrameStore:
     def unsubscribe(self, event: asyncio.Event) -> None:
         self._waiters.discard(event)
 
+    def drop(self, camera_id: int) -> None:
+        self._frames.pop(camera_id, None)
+
     def clear(self) -> None:
         self._frames.clear()
 

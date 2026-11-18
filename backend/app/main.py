@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from app.api import runners as runners_api
 from app.api.alerts import router as alerts_router
 from app.api.auth import router as auth_router
 from app.api.cameras import router as cameras_router
@@ -20,6 +21,7 @@ from app.api.people import router as people_router
 from app.api.ws import router as ws_router
 from app.db.session import SessionLocal
 from app.services import retention
+from app.services.camera_runner import camera_runner
 
 load_dotenv()
 logger = logging.getLogger("universe")
@@ -44,11 +46,14 @@ async def _retention_loop() -> None:
 
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    runners_api.event_loop = asyncio.get_running_loop()
     task = asyncio.create_task(_retention_loop())
     yield
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await task
+    # AI scripts started from the dashboard don't outlive the API.
+    await run_in_threadpool(camera_runner.stop_all)
 
 
 app = FastAPI(title="UniVerse Surveillance API", lifespan=lifespan)
@@ -69,6 +74,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(cameras_router)
+app.include_router(runners_api.router)
+app.include_router(runners_api.list_router)
 app.include_router(people_router)
 app.include_router(embeddings_router)
 app.include_router(alerts_router)
