@@ -46,13 +46,13 @@ export default function LiveViewPage() {
     <div>
       <PageMeta
         title="Live View | UniVerse"
-        description="Live, AI-annotated feeds from every camera"
+        description="Live, annotated feeds from every camera"
       />
       <PageBreadcrumb pageTitle="Live View" />
 
       <ComponentCard
         title="Live View"
-        description="Every camera's feed as its AI analysis sees it: boxes, track IDs, recognized names and the restricted zone. Click a camera to start or stop monitoring and see what its scripts are doing."
+        description="Every camera's feed as its detection script sees it: boxes, track IDs, recognized names and the restricted zone. Click a camera to start or stop monitoring and see what its scripts are doing."
       >
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">

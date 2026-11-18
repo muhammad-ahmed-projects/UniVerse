@@ -92,7 +92,7 @@ export default function UsersPage() {
 
       <ComponentCard
         title="Users"
-        description="Everyone who can sign in to the dashboard, and the AI scripts' service account. Admins manage cameras, people, settings and users; security operators watch cameras and review alerts and incidents."
+        description="Everyone who can sign in to the dashboard, and the detection scripts' service account. Admins manage cameras, people, settings and users; security operators watch cameras and review alerts and incidents."
       >
         <div className="mb-4 flex justify-end">
           <Button onClick={() => setFormFor("new")}>Add User</Button>
@@ -230,7 +230,7 @@ export default function UsersPage() {
             </span>{" "}
             won't be able to sign in any more. This can't be undone.
             {pendingDelete?.role === "ai_service" &&
-              " The AI scripts use this account; monitoring stops working until they get another one."}{" "}
+              " The detection scripts use this account; monitoring stops working until they get another one."}{" "}
             Accounts that reviewed incidents can't be deleted; deactivate them
             instead.
           </>

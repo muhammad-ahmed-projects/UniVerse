@@ -105,7 +105,7 @@ export default function CamerasPage() {
 
       <ComponentCard
         title="Cameras"
-        description="Every registered camera, its live status, and what's monitoring it. Open Monitoring to start or stop a camera's AI analyses and watch their output."
+        description="Every registered camera, its live status, and what's monitoring it. Open Monitoring to start or stop a camera's detection and watch its output."
       >
         <div className="mb-4 flex justify-end">
           {isAdmin && (
@@ -165,7 +165,7 @@ export default function CamerasPage() {
                           highlight === camera.id ? HIGHLIGHT_ROW : undefined
                         }
                       >
-                        {/* AI scripts take this as --camera-id. */}
+                        {/* Detection scripts take this as --camera-id. */}
                         <TableCell className="font-mono px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
                           {camera.id}
                         </TableCell>

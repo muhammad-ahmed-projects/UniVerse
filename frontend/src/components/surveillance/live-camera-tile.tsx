@@ -16,7 +16,7 @@ function StatusBadge({ status }: { status: Camera["status"] }) {
   return <Badge color="gray">unknown</Badge>;
 }
 
-/** One camera's live view: the annotated frames its AI script streams. */
+/** One camera's live view: the annotated frames its detection script streams. */
 export function LiveCameraTile({
   camera,
   onOpen,

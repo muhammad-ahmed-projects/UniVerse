@@ -22,14 +22,14 @@ export interface UserUpdateInput {
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
   security_operator: "Security operator",
-  ai_service: "AI service",
+  ai_service: "Detection service",
 };
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   admin: "Full access: cameras, people, settings, users.",
   security_operator: "Watches cameras and reviews alerts and incidents.",
   ai_service:
-    "Account for the AI scripts (UNIVERSE_API_USERNAME), not for people.",
+    "Account for the detection scripts (UNIVERSE_API_USERNAME), not for people.",
 };
 
 /** Admin-only user management (the API returns 403 for anyone else). */

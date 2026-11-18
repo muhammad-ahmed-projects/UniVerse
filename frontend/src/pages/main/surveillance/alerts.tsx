@@ -111,13 +111,13 @@ export default function AlertsPage() {
     <div>
       <PageMeta
         title="Alerts | UniVerse"
-        description="Live AI-generated security alerts"
+        description="Live security alerts from the detection scripts"
       />
       <PageBreadcrumb pageTitle="Alerts" />
 
       <ComponentCard
         title="Alerts"
-        description="Raw AI-generated events. New alerts appear here live. Review one and promote it to an Incident for the acknowledge/resolve workflow."
+        description="Raw events from the detection scripts. New alerts appear here live. Review one and promote it to an Incident for the acknowledge/resolve workflow."
       >
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">

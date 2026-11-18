@@ -124,7 +124,8 @@ export function GlobalSearch() {
   };
 
   const results = useMemo<Result[]>(() => {
-    const q = query.trim().toLowerCase();    if (!q) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
     const out: Result[] = [];
     const add = (items: Result[]) => out.push(...items.slice(0, MAX_PER_GROUP));
 

@@ -44,7 +44,7 @@ function defaultSelection(
   return isWebcam ? ["roi_loitering"] : ["roi_loitering", "camera_health"];
 }
 
-/** Start/stop a camera's AI analyses and watch what they're doing. */
+/** Start/stop a camera's detection analyses and watch what they're doing. */
 export function MonitoringDialog({
   camera,
   runner: initialRunner,
@@ -165,7 +165,7 @@ export function MonitoringDialog({
             {isWebcam
               ? "USB webcam: only one analysis can use it at a time."
               : "IP camera or video: several analyses can run together."}{" "}
-            Analyses run as background AI scripts on the server.
+            Analyses run as background detection scripts on the server.
           </DialogDescription>
         </DialogHeader>
 
@@ -269,7 +269,7 @@ export function MonitoringDialog({
               >
                 {runner && runner.log.length > 0
                   ? runner.log.join("\n")
-                  : "No output yet. Start monitoring to see what the AI scripts are doing."}
+                  : "No output yet. Start monitoring to see what the detection scripts are doing."}
               </pre>
               {state === "failed" && (
                 <p className="mt-2 text-xs text-red-600 dark:text-red-400">

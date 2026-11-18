@@ -21,8 +21,8 @@ export default function AuthLayout() {
                 />
               </Link>
               <p className="text-center text-gray-400 dark:text-white/60">
-                AI-powered smart surveillance: detection, tracking, and
-                real-time incident response
+                Smart surveillance: detection, tracking, and real-time incident
+                response
               </p>
             </div>
           </div>

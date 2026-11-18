@@ -259,7 +259,7 @@ export function ResetPasswordDialog({
           <DialogTitle>Reset password · {user?.username}</DialogTitle>
           <DialogDescription>
             {user?.role === "ai_service"
-              ? "The AI scripts use this account: update UNIVERSE_API_PASSWORD in backend/.env too, then restart monitoring."
+              ? "The detection scripts use this account: update UNIVERSE_API_PASSWORD in backend/.env too, then restart monitoring."
               : "All of this account's open sessions are signed out."}
           </DialogDescription>
         </DialogHeader>

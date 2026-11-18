@@ -15,7 +15,7 @@ function describeCameraError(err: unknown): string {
     return "Camera permission was denied. Allow camera access for this site in the browser's address bar, then try again.";
   if (name === "NotFoundError") return "No camera was found on this computer.";
   if (name === "NotReadableError")
-    return "The camera is busy. Close other apps using it (including any UniVerse AI script running on this webcam) and try again.";
+    return "The camera is busy. Close other apps using it (including any UniVerse detection script running on this webcam) and try again.";
   return "Could not start the camera.";
 }
 

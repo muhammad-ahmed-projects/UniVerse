@@ -1,6 +1,6 @@
 import { apiClient } from "./api-client";
 
-/** AI scripts the dashboard can start for a camera. */
+/** Detection scripts the dashboard can start for a camera. */
 export type AnalysisScript =
   "roi_loitering" | "tamper_detection" | "face_recognition" | "camera_health";
 
