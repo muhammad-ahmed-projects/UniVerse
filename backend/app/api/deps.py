@@ -27,7 +27,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_error from None
 
     user = db.query(User).filter(User.username == username).first()
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not user.token_is_current(payload.get("iat")):
         raise credentials_error
     return user
 

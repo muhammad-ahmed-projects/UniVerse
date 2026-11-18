@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -6,7 +8,7 @@ from app.api.deps import get_current_user, require_role
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models.user import User, UserRole
-from app.schemas.auth import Token, UserOut, UserRegister
+from app.schemas.auth import PasswordChange, Token, UserOut, UserRegister
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -52,3 +54,23 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+@router.post("/change-password", response_model=Token)
+def change_password(
+    payload: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Token:
+    """Change your own password. Other sessions of the account are logged out;
+    this one continues with the returned token."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    if verify_password(payload.new_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="The new password must differ from the current one"
+        )
+    current_user.hashed_password = hash_password(payload.new_password)
+    current_user.password_changed_at = datetime.now(UTC)
+    db.commit()
+    return Token(access_token=create_access_token(subject=current_user.username, role=current_user.role.value))

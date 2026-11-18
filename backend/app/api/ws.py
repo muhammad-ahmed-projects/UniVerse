@@ -16,10 +16,10 @@ router = APIRouter(tags=["websocket"])
 MAX_STREAM_SUBSCRIPTIONS = 64
 
 
-def _is_active_user(username: str) -> bool:
+def _is_valid_session(username: str, issued_at: float | None) -> bool:
     with SessionLocal() as db:
         user = db.query(User).filter(User.username == username).first()
-        return user is not None and user.is_active
+        return user is not None and user.is_active and user.token_is_current(issued_at)
 
 
 async def _authorize(websocket: WebSocket) -> bool:
@@ -27,11 +27,12 @@ async def _authorize(websocket: WebSocket) -> bool:
     as a query param. Closes the socket (1008) and returns False if invalid."""
     token = websocket.query_params.get("token", "")
     try:
-        username = decode_access_token(token).get("sub")
+        payload = decode_access_token(token)
+        username, issued_at = payload.get("sub"), payload.get("iat")
     except PyJWTError:
-        username = None
+        username, issued_at = None, None
 
-    if not username or not await run_in_threadpool(_is_active_user, username):
+    if not username or not await run_in_threadpool(_is_valid_session, username, issued_at):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return False
     return True

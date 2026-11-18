@@ -25,3 +25,11 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Tokens issued before this moment are rejected, so changing or resetting a
+    # password logs out every existing session of that account.
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    def token_is_current(self, issued_at: float | None) -> bool:
+        if self.password_changed_at is None:
+            return True
+        return isinstance(issued_at, int | float) and issued_at >= self.password_changed_at.timestamp()

@@ -30,8 +30,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(subject: str, role: str, expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES) -> str:
-    expire = datetime.now(UTC) + timedelta(minutes=expires_minutes)
-    payload = {"sub": subject, "role": role, "exp": expire}
+    now = datetime.now(UTC)
+    expire = now + timedelta(minutes=expires_minutes)
+    # iat lets the API reject tokens issued before a password change (User.token_is_current).
+    # Sub-second iat (RFC 7519 allows non-integer NumericDate), so a token issued
+    # a moment before a password change in the same second is still rejected.
+    payload = {"sub": subject, "role": role, "iat": now.timestamp(), "exp": expire}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 

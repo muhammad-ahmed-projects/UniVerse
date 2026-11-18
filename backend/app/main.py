@@ -18,6 +18,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.incidents import router as incidents_router
 from app.api.people import embeddings_router
 from app.api.people import router as people_router
+from app.api.users import router as users_router
 from app.api.ws import router as ws_router
 from app.db.session import SessionLocal
 from app.services import retention
@@ -73,6 +74,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(cameras_router)
 app.include_router(runners_api.router)
 app.include_router(runners_api.list_router)
