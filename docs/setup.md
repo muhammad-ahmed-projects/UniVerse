@@ -243,7 +243,7 @@ The easiest way: the dashboard starts the AI analysis for you.
 
    | Analysis | What it does |
    |---|---|
-   | People, restricted area & loitering | Boxes and IDs for people; alerts on entering the restricted zone and on staying too long |
+   | People, restricted area & unusual activity | Boxes and IDs for people; alerts on entering the restricted zone, staying too long, a crowd, running, a possible fall and an unattended bag |
    | Face recognition | Names registered people, updates their "last seen", alerts on unknown faces |
    | Tamper detection | Alerts when the camera is covered, moved or out of focus |
    | Camera health only | Watches whether the feed is up; no detection |
@@ -267,6 +267,28 @@ stops when you stop the backend. Start it again after a restart.
 On the Cameras page an admin can also **Edit** a camera (name, location,
 stream source) or **Delete** it. Deleting also deletes the camera's
 alerts, incidents and evidence photos.
+
+### Review alerts, tune unusual activity, read the audit log
+
+- **Alerts**: mark each alert **Real** or **False alarm** (**undo** puts
+  it back). The **Detection accuracy** card at the top turns these into
+  precision and false-alarm rate, overall and per alert type. Creating an
+  incident from an alert also counts it as real. Operators can review too.
+- **Settings > Unusual Activity** (per camera, admin only):
+  - **Crowd: people**: how many people in view at once raise a crowd alert.
+  - **Running: speed**: in frame widths per second (0.6 means crossing
+    the picture in under 2 seconds).
+  - **Unattended bag (s)**: how long a backpack, handbag or suitcase may
+    stay still with nobody near it.
+  - **Fall: lying (s)**: how long someone who was standing must stay lying.
+
+  Set any of them to `0` to turn that alert off. Restart the camera's
+  monitoring to apply changes. To test quickly, set **Crowd: people** to
+  `1` and stand in front of the webcam.
+- **Audit Log** (admin only, in the sidebar): every sign-in and failed
+  sign-in, account change, camera and settings change, monitoring
+  start/stop, face-photo access, alert review and incident action, with
+  the user, time and IP. Filter by category or search by username.
 
 ## Step 7: Run the AI scripts from a terminal (optional)
 

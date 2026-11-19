@@ -82,8 +82,8 @@ no separate code path to keep in sync.
    passed via `--source`).
 2. It detects/tracks/classifies against thresholds loaded once at
    startup from `GET /cameras/{id}/settings` (not hardcoded).
-3. On a state-changing event (ROI entry, loitering, tamper state
-   change), it calls `POST /alerts`.
+3. On a state-changing event (ROI entry, loitering, unusual activity,
+   tamper state change), it calls `POST /alerts`.
 4. The backend validates `camera_id` and `priority`, writes the `Alert`
    row, and broadcasts a `{"type": "alert", ...}` JSON message to every
    connected `/ws/alerts` WebSocket client.
@@ -91,7 +91,8 @@ no separate code path to keep in sync.
    updates the open page live, no refresh. Each browser tab keeps one
    shared WebSocket for all its components, reconnecting with
    exponential backoff (1s up to 30s) after a drop.
-6. A human operator reviews the alert and, if it's a real incident,
+6. A human operator reviews the alert: "Real" or "False alarm"
+   (`PATCH /alerts/{id}/review`), and, if it's a real incident,
    clicks "Create Incident" (`POST /incidents`, linking back via
    `source_alert_id`) -- alerts never auto-promote themselves. This is
    the project's required human-review step before an AI alert counts
@@ -165,6 +166,44 @@ hours, along with files whose alert no longer exists.
    10 s per person), which updates the person's "last seen" camera and
    time on the People page live. Unknown faces raise `UNKNOWN_FACE` alerts
    with evidence. The names are also drawn on the live view.
+
+## Unusual activity
+
+`roi_loitering.py` also runs `activity_rules.py` on the tracked boxes of
+each frame. The rules are a pure module (no camera, no model), so they are
+unit-tested with synthetic tracks:
+
+| Alert | Rule | Setting (`0` = off) |
+|---|---|---|
+| `CROWD` | At least N people in view. Fires once, re-arms when the count drops below N. | `crowd_threshold` (5) |
+| `RUNNING` | A person's box centre moves faster than this, in frame widths per second, measured over about 1 s. | `running_speed` (0.6) |
+| `FALL_DETECTED` | A person who was standing (box height > 1.3 x width) in the last 3 s stays lying (width > 1.2 x height) this long. | `fall_seconds` (2) |
+| `ABANDONED_OBJECT` | A backpack, handbag or suitcase (YOLO COCO classes 24, 26, 28) stays still, with no person within 15% of the frame width, this long. | `abandoned_seconds` (30) |
+
+These are heuristics on bounding boxes, not pose or action models: a fall
+is detected from the box shape only, so someone lying down on purpose, or
+a person seen side-on very close to the camera, can also trigger it. That
+is why every one of these alerts goes to a person for review.
+
+## Alert review and accuracy
+
+Every alert can be marked "Real" or "False alarm" on the Alerts page.
+Promoting it to an incident also marks it real. `GET /alerts/review-stats`
+turns these verdicts into precision (real / reviewed) and false-alarm rate
+(false alarms / reviewed), overall and per alert type. This is the
+proposal's false-alert measurement, taken from the operators' own reviews
+in the mock environment.
+
+## Audit log
+
+`services/audit.py` gives route handlers an `Auditor` (FastAPI
+dependency) that adds an `audit_logs` row to the request's own database
+session, so the entry is committed together with the change it records,
+or not at all. Failed sign-ins and face-photo views are committed on their
+own. Each row stores the action, the user and a snapshot of their
+username, the target, a small JSON of details (never passwords) and the
+client IP. Only admins can read it (`GET /audit-logs`, Audit Log page),
+and there is no API to change or delete entries.
 
 ## Request handling
 

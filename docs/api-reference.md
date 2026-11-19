@@ -70,8 +70,8 @@ curl -X POST http://127.0.0.1:8000/auth/register \
 | PUT | `/cameras/{id}` | admin | Partial update. Broadcasts `camera_status` over WS if `status` changes. |
 | DELETE | `/cameras/{id}` | admin | 204 on success. |
 | POST | `/cameras/{id}/heartbeat` | any | `{status: "online" \| "offline"}` from `camera_health.py`. Updates `status` (and `last_seen_at` when online); broadcasts `camera_status` only when the status changes. |
-| GET | `/cameras/{id}/settings` | any | Returns ROI/loiter/tamper/face thresholds; creates a default row on first read. |
-| PUT | `/cameras/{id}/settings` | admin | Upserts all 10 threshold fields (see `camera_settings` schema). ROI validated so `x1<x2` and `y1<y2`; `face_match_threshold` must be 0.2-0.9. |
+| GET | `/cameras/{id}/settings` | any | Returns ROI/loiter/tamper/face/unusual-activity thresholds; creates a default row on first read. |
+| PUT | `/cameras/{id}/settings` | admin | Upserts all 14 threshold fields (see `camera_settings` schema). ROI validated so `x1<x2` and `y1<y2`; `face_match_threshold` must be 0.2-0.9; `crowd_threshold` 0-100 (int), `running_speed` 0-5, `abandoned_seconds` 0-3600, `fall_seconds` 0-60 (`0` turns that rule off). |
 | POST | `/cameras/{id}/frame?source=<script>&priority=<0-9>` | any | Live-view frame from an AI script. Body is the raw JPEG with `Content-Type: image/jpeg` (else 415), at most 1 MB (else 413), must start with JPEG magic bytes (else 422). 204 on success. 409 if another script owns this camera's live view: a higher `priority` takes over (detection scripts send 1, `camera_health` 0); between equals the first one keeps it until it has been silent for 3 s. Frames are held in memory only, never stored. |
 
 `PUT /cameras/{id}` rejects a `stream_source` containing `:***@` (the
@@ -141,10 +141,12 @@ curl -X POST http://127.0.0.1:8000/people/3/faces \
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | GET | `/alerts` | any | Newest first. Query params: `camera_id`, `unresolved_only` (bool), `limit` (1-500, default 100), `offset`. Each alert includes `images: [{id, alert_id, captured_at}]`. |
+| GET | `/alerts/review-stats` | any | `{overall, by_type: [...]}`; each has `total`, `confirmed`, `false_alarm`, `unreviewed`, `precision` (confirmed / reviewed) and `false_alarm_rate` (false alarms / reviewed). Both rates are `null` until something is reviewed. |
 | GET | `/alerts/{id}` | any | 404 if missing. |
 | POST | `/alerts` | any | Creates an alert, broadcasts `{"type": "alert", ...}` over WS. This is what the AI scripts call via `backend_client.py`. |
 | POST | `/alerts/{id}/images` | any | Multipart, field `file`: an evidence snapshot (max 5 MB, re-encoded to JPEG). 201 with the image metadata; broadcasts `alert_image`. 409 after 10 images per alert, 422 if not an image. The AI scripts send 3 frames per alert by default (at 0 s, 1 s, 2 s). |
 | GET | `/alerts/{id}/images/{image_id}` | any | The evidence JPEG. 404 if the image belongs to another alert. |
+| PATCH | `/alerts/{id}/review` | any | `{review_status: "confirmed" \| "false_alarm" \| null}`: the operator's verdict (`null` clears it). Sets `reviewed_by`/`reviewed_at`. 400 for anything but `confirmed` once the alert is linked to an incident. Audited; broadcasts `alert_review` (`{alert_id, review_status}`). |
 
 ```sh
 curl -X POST http://127.0.0.1:8000/alerts \
@@ -155,8 +157,13 @@ curl -X POST http://127.0.0.1:8000/alerts \
 `priority` must be one of `low`, `medium`, `high` (anything else is a 422).
 
 Alert types emitted by the AI scripts: `ROI_ENTRY`, `LOITERING`,
+`CROWD`, `RUNNING`, `FALL_DETECTED`, `ABANDONED_OBJECT`,
 `TAMPER_COVERED`, `TAMPER_MOVED`, `TAMPER_DEFOCUSED`, `CAMERA_OFFLINE`,
 `CAMERA_ONLINE`, `UNKNOWN_FACE`.
+
+Each alert carries `review_status` (`confirmed`, `false_alarm` or `null`
+= not reviewed), `reviewed_by` and `reviewed_at`. Promoting an alert to an
+incident sets it to `confirmed`.
 
 Evidence images older than `EVIDENCE_RETENTION_DAYS` (env, default 30;
 `0` keeps them forever) are deleted automatically at startup and every 6
@@ -180,6 +187,21 @@ Resolving requires acknowledging first, and neither step can be repeated.
 Promote/acknowledge/resolve take a row lock, so two operators acting on
 the same alert or incident at once can't both succeed.
 
+## Audit log (admin only)
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/audit-logs` | admin | Newest first. `{total, items: [{id, created_at, actor_id, actor_username, action, target_type, target_id, details, ip_address}]}`. Query params: `category` (`auth`, `user`, `camera`, `monitoring`, `person`, `face`, `alert`, `incident`; matches actions starting with `<category>.`), `q` (username or action, case-insensitive), `limit` (1-200, default 50), `offset`. Operators get 403. |
+
+Recorded actions: sign-in and failed sign-in (`auth.login`,
+`auth.login_failed`), create-account and forgot-password requests,
+password changes, user create/approve/update/reset/delete, camera
+create/update/delete and settings changes, monitoring start/stop,
+person create/delete, face photo add/view/delete, alert reviews, and
+incident create/acknowledge/resolve. There is no endpoint to edit or
+delete entries. `actor_username` is a snapshot, so the entry stays
+readable after the account is deleted.
+
 ## Dashboard
 
 | Method | Path | Auth | Notes |
@@ -190,7 +212,7 @@ the same alert or incident at once can't both succeed.
 
 | Path | Auth | Notes |
 |---|---|---|
-| `ws://127.0.0.1:8000/ws/alerts?token=<jwt>` | JWT in query param | Rejected with `403` at handshake on an invalid/missing token or a deactivated/deleted user. Broadcasts 6 JSON message types: `alert`, `camera_status`, `incident_update`, `alert_image` (`{alert_id, incident_id, image}`), `person_seen` (`{person_id, camera_id, similarity, seen_at}`), `camera_runner` (`{camera_id, running}`). Client doesn't need to send anything after connecting. |
+| `ws://127.0.0.1:8000/ws/alerts?token=<jwt>` | JWT in query param | Rejected with `403` at handshake on an invalid/missing token or a deactivated/deleted user. Broadcasts 8 JSON message types: `alert`, `camera_status`, `incident_update`, `alert_image` (`{alert_id, incident_id, image}`), `alert_review` (`{alert_id, review_status}`), `person_seen` (`{person_id, camera_id, similarity, seen_at}`), `camera_runner` (`{camera_id, running}`), `account_request`. Client doesn't need to send anything after connecting. |
 | `ws://127.0.0.1:8000/ws/stream?token=<jwt>` | JWT in query param | Live camera frames. Send `{"subscribe": [1, 2]}` (replaces the previous list; at most 64 IDs). Each binary message is a 4-byte big-endian camera ID followed by one JPEG; a new subscriber gets each camera's current frame right away. Only the latest frame is kept, so a slow client skips frames instead of lagging. One socket carries all cameras, because browsers allow only ~6 HTTP connections per host. |
 
 ## Health

@@ -481,6 +481,16 @@ all seven behaviors against the webcam, each one individually testable.
   this machine and the backend only listens on IPv4 — fixed by using
   `127.0.0.1` in `backend_client.py` and `frontend/.env(.example)`;
   latency dropped to ~0.005-0.01s. See `/docs/evaluation-results.md`.
+- [x] Audit log, alert review, unusual activity (2026-11-19) — see
+  `/docs/evaluation-results.md`. Admin-only Audit Log page (`audit_logs`
+  table, `GET /audit-logs`); Real/False-alarm review on every alert with
+  precision + false-alarm rate (`GET /alerts/review-stats`); `CROWD`,
+  `RUNNING`, `FALL_DETECTED`, `ABANDONED_OBJECT` rules
+  (`ai/prototypes/activity_rules.py`, run by `roi_loitering.py`,
+  thresholds on Settings > Unusual Activity, 0 = off). Migration
+  `e6f4a0b3c5d7`. Verified: pytest 95/95, headless-Chrome E2E 21/21 with
+  a live `CROWD` alert from the webcam. Running/fall/abandoned are
+  unit-tested only: stage them in the mock environment in Phase 6
 - [ ] Phase 6: Testing & Evaluation — Section 12's table consolidated
   in `/docs/evaluation-results.md` (9/11 rows PASS, reusing earlier
   Phase 1/3/5 results). **Not done:** face recognition (1/3 team
@@ -503,7 +513,7 @@ all seven behaviors against the webcam, each one individually testable.
   routes, review-flow races, resolve-before-acknowledge, unbounded
   lists, dead `/profile` links, WS retry loop on bad tokens; plus dead
   TailAdmin code/branding). Added a backend pytest suite (28/28 pass at
-  the time, 68 now;
+  the time, 95 now;
   separate `universe_test` DB) and ruff config; 28/28 headless-browser
   E2E checks pass. Details in `/docs/evaluation-results.md`. Run
   `python -m pytest` (backend) and `npm run build && npm run lint`

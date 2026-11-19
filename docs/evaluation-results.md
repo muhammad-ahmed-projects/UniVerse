@@ -907,3 +907,66 @@ Headless Chrome E2E 19/19 plus the users suite 34/34, no console errors:
   and the row without a refresh; reject;
 - a reset request shows on the user's row; the admin's reset closes it
   and the new password works.
+
+## Audit log, alert review and unusual activity (2026-11-19)
+
+Three items the proposal asks for that were still missing:
+
+- **Audit log** (proposal: "Security & Privacy ... audit logs"). Table
+  `audit_logs` records sign-ins and failed sign-ins, account requests,
+  password changes, user/camera/settings changes, monitoring start/stop,
+  person and face-photo add/view/delete, alert reviews and incident
+  actions, with user, time, target, details and IP. Admin-only Audit Log
+  page with category filter, search and paging. No API to edit or delete
+  entries.
+- **Alert review** (proposal: "false-alert rate", "human review before an
+  AI alert is treated as a confirmed incident"). Each alert can be marked
+  Real or False alarm; promoting it to an incident marks it Real. The
+  Alerts page shows precision and false-alarm rate from these reviews,
+  overall and per alert type (`GET /alerts/review-stats`).
+- **Unusual activity** (proposal: "predefined unusual activity for human
+  review"). `activity_rules.py`, run by `roi_loitering.py`: `CROWD`,
+  `RUNNING`, `FALL_DETECTED`, `ABANDONED_OBJECT`. Per-camera thresholds on
+  Settings > Unusual Activity; `0` turns a rule off. See
+  `/docs/architecture.md` ("Unusual activity") for the rules.
+
+Migration `e6f4a0b3c5d7` adds `audit_logs`, the alert review columns and
+the four settings columns. Existing alerts already linked to an incident
+are marked `confirmed`. Upgrade, downgrade and upgrade again verified on a
+throwaway database; `alembic check` reports no drift.
+
+**Tests:** backend pytest 95/95 (15 new), ruff clean, frontend build and
+lint clean.
+- `test_activity_rules.py` (9, synthetic tracks): crowd fires once per
+  episode; walking speed is not running, running is; a fall after
+  standing fires; lying without standing first, or lying for less than
+  `fall_seconds`, does not; an unattended bag alerts once; a bag with a
+  person nearby does not; moving a bag restarts its timer; `0` turns each
+  rule off.
+- `test_audit_review.py` (6): sign-ins and failed sign-ins are audited;
+  admin actions are audited; audit filters, paging and operator 403;
+  review verdicts and the stats; promoting an alert confirms it; the new
+  settings are validated and saved.
+
+Headless Chrome E2E 21/21 with the real webcam and YOLO, no console
+errors:
+- Settings > Unusual Activity saves (crowd threshold set to 1);
+- monitoring started from the dashboard raised a live `CROWD` alert from
+  the webcam;
+- False alarm / Real verdicts saved, the accuracy card updated live to
+  50%, undo works;
+- the Audit Log lists the sign-in, settings change, monitoring start and
+  reviews; the category filter works;
+- an operator has no Audit Log in the sidebar and is sent away from
+  `/audit-log`, but can review alerts;
+- camera settings restored afterwards; the test alerts were deleted.
+
+`roi_loitering.py` ran at about 4.8 FPS on CPU with bag classes added to
+tracking (was about 4-6 FPS without).
+
+**Not verified live:** `RUNNING`, `FALL_DETECTED` and `ABANDONED_OBJECT`
+are covered only by the unit tests above. They need a staged test in the
+mock environment (someone running across the view, lying down, leaving a
+bag) before their thresholds can be called tuned. The fall rule uses the
+person's box shape only, not a pose model, so expect false alarms when
+someone lies down on purpose; the review buttons measure exactly that.
