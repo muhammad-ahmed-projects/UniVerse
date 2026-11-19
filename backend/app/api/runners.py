@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_role
 from app.db.session import SessionLocal, get_db
 from app.models.camera import Camera, CameraStatus
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.runner import RunnerOut, RunnerScriptOut, RunnerStart
+from app.services.audit import Auditor, get_auditor
 from app.services.camera_runner import CameraRun, RunnerError, camera_runner, is_webcam
 from app.services.ws_manager import manager
 
@@ -109,6 +110,8 @@ def start_runner(
     payload: RunnerStart,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> RunnerOut:
     """Start the selected analyses for this camera, reading its stream_source."""
     camera = _get_camera_or_404(camera_id, db)
@@ -116,16 +119,24 @@ def start_runner(
         run = camera_runner.start(camera.id, camera.stream_source, list(payload.scripts))
     except RunnerError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+    audit.log(actor, "monitoring.start", "camera", camera.id, commit=True, scripts=list(payload.scripts))
     background_tasks.add_task(manager.broadcast, _runner_message(camera.id, running=True))
     return _to_out(camera, run)
 
 
 @router.delete("/{camera_id}/runner", response_model=RunnerOut, dependencies=[admin_only])
-def stop_runner(camera_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> RunnerOut:
+def stop_runner(
+    camera_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> RunnerOut:
     """Stop this camera's analyses. Nobody is watching the camera any more, so
     its status becomes "unknown" (not "offline": the camera itself may be fine)."""
     camera = _get_camera_or_404(camera_id, db)
     run = camera_runner.stop(camera.id)
+    audit.log(actor, "monitoring.stop", "camera", camera.id, commit=True)
     background_tasks.add_task(manager.broadcast, _runner_message(camera.id, running=False))
     if run is not None:
         status_message = _set_status(camera.id, CameraStatus.UNKNOWN)

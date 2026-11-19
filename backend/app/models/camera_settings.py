@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -34,6 +34,16 @@ class CameraSettings(Base):
     # Cosine similarity (0-1) a face must reach against a registered sample to
     # count as that person; below it the face is "Unknown". Higher = stricter.
     face_match_threshold: Mapped[float] = mapped_column(Float, default=0.45, nullable=False)
+
+    # Unusual activity (roi_loitering.py). 0 turns a rule off.
+    # People in view at once that count as a crowd.
+    crowd_threshold: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    # Speed, in frame widths per second, above which a person counts as running.
+    running_speed: Mapped[float] = mapped_column(Float, default=0.6, nullable=False)
+    # Seconds a bag/suitcase stays still with nobody near it before an alert.
+    abandoned_seconds: Mapped[float] = mapped_column(Float, default=30.0, nullable=False)
+    # Seconds a person's box must stay lying-down shaped (after standing) to count as a fall.
+    fall_seconds: Mapped[float] = mapped_column(Float, default=2.0, nullable=False)
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

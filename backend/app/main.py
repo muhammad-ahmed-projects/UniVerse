@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api import runners as runners_api
 from app.api.alerts import router as alerts_router
+from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.cameras import router as cameras_router
 from app.api.dashboard import router as dashboard_router
@@ -75,6 +76,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(audit_router)
 app.include_router(cameras_router)
 app.include_router(runners_api.router)
 app.include_router(runners_api.list_router)

@@ -1,13 +1,26 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.alert import Alert, AlertImage
 from app.models.camera import Camera
-from app.schemas.alert import AlertCreate, AlertImageOut, AlertOut
+from app.models.user import User
+from app.schemas.alert import (
+    AlertCreate,
+    AlertImageOut,
+    AlertOut,
+    AlertReview,
+    ReviewCounts,
+    ReviewStats,
+    ReviewStatsRow,
+)
 from app.services import images, media_store
+from app.services.audit import Auditor, get_auditor
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -31,6 +44,41 @@ def list_alerts(
     if unresolved_only:
         q = q.filter(Alert.incident_id.is_(None))
     return q.order_by(Alert.triggered_at.desc(), Alert.id.desc()).offset(offset).limit(limit).all()
+
+
+def _counts(confirmed: int, false_alarm: int, unreviewed: int) -> dict:
+    reviewed = confirmed + false_alarm
+    return {
+        "total": reviewed + unreviewed,
+        "confirmed": confirmed,
+        "false_alarm": false_alarm,
+        "unreviewed": unreviewed,
+        "precision": round(confirmed / reviewed, 3) if reviewed else None,
+        "false_alarm_rate": round(false_alarm / reviewed, 3) if reviewed else None,
+    }
+
+
+# Declared before /{alert_id} so "review-stats" isn't parsed as an alert id.
+@router.get("/review-stats", response_model=ReviewStats, dependencies=[Depends(get_current_user)])
+def review_stats(db: Session = Depends(get_db)) -> ReviewStats:
+    """How many alerts operators confirmed vs marked as false alarms, per alert
+    type: the measured precision / false-alarm rate for the evaluation report."""
+    rows = (
+        db.query(
+            Alert.alert_type,
+            func.count().filter(Alert.review_status == "confirmed"),
+            func.count().filter(Alert.review_status == "false_alarm"),
+            func.count().filter(Alert.review_status.is_(None)),
+        )
+        .group_by(Alert.alert_type)
+        .order_by(Alert.alert_type)
+        .all()
+    )
+    by_type = [ReviewStatsRow(alert_type=t, **_counts(c, f, u)) for t, c, f, u in rows]
+    overall = _counts(
+        sum(r.confirmed for r in by_type), sum(r.false_alarm for r in by_type), sum(r.unreviewed for r in by_type)
+    )
+    return ReviewStats(overall=ReviewCounts(**overall), by_type=by_type)
 
 
 @router.get("/{alert_id}", response_model=AlertOut, dependencies=[Depends(get_current_user)])
@@ -71,6 +119,39 @@ def create_alert(
             "message": alert.message,
             "triggered_at": alert.triggered_at.isoformat(),
         },
+    )
+    return alert
+
+
+@router.patch("/{alert_id}/review", response_model=AlertOut)
+def review_alert(
+    alert_id: int,
+    payload: AlertReview,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> Alert:
+    """Operator verdict on a detection: a real event or a false alarm."""
+    alert = db.query(Alert).filter(Alert.id == alert_id).with_for_update().first()
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    if alert.incident_id is not None and payload.review_status != "confirmed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This alert became an incident, so it was confirmed. Resolve the incident instead.",
+        )
+    alert.review_status = payload.review_status
+    alert.reviewed_by = actor.id if payload.review_status else None
+    alert.reviewed_at = datetime.now(UTC) if payload.review_status else None
+    audit.log(
+        actor, "alert.review", "alert", alert.id, verdict=payload.review_status or "cleared", type=alert.alert_type
+    )
+    db.commit()
+    db.refresh(alert)
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "alert_review", "alert_id": alert.id, "review_status": alert.review_status},
     )
     return alert
 

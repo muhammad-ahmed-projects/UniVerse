@@ -18,6 +18,7 @@ from app.schemas.auth import (
     UserOut,
     UserRegister,
 )
+from app.services.audit import Auditor, get_auditor
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,6 +33,7 @@ def register(
     db: Session = Depends(get_db),
     # Only an existing admin can create new accounts -- no open self-registration.
     _current_admin: User = Depends(require_role(UserRole.ADMIN)),
+    audit: Auditor = Depends(get_auditor),
 ) -> User:
     if db.query(User).filter(User.username == payload.username).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered")
@@ -43,15 +45,26 @@ def register(
         role=payload.role,
     )
     db.add(user)
+    try:
+        db.flush()  # assigns user.id for the audit entry; a taken email fails here
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That email is already in use") from None
+    audit.log(_current_admin, "user.create", "user", user.id, username=user.username, role=user.role.value)
     db.commit()
     db.refresh(user)
     return user
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+    audit: Auditor = Depends(get_auditor),
+) -> Token:
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        audit.log(None, "auth.login_failed", commit=True, actor_username=form_data.username[:50])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -66,12 +79,18 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
 
+    audit.log(user, "auth.login", commit=True)
     access_token = create_access_token(subject=user.username, role=user.role.value)
     return Token(access_token=access_token)
 
 
 @router.post("/signup", response_model=Message, status_code=status.HTTP_202_ACCEPTED)
-def signup(payload: SignupRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> Message:
+def signup(
+    payload: SignupRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    audit: Auditor = Depends(get_auditor),
+) -> Message:
     """Public "Create account". The account is pending (can't sign in) until an
     admin approves it on the Users page and picks its role."""
     if db.query(User).filter(User.username == payload.username).first():
@@ -92,6 +111,7 @@ def signup(payload: SignupRequest, background_tasks: BackgroundTasks, db: Sessio
             is_pending=True,
         )
     )
+    audit.log(None, "auth.signup_request", "user", actor_username=payload.username)
     try:
         db.commit()
     except IntegrityError:
@@ -105,7 +125,10 @@ def signup(payload: SignupRequest, background_tasks: BackgroundTasks, db: Sessio
 
 @router.post("/forgot-password", response_model=Message, status_code=status.HTTP_202_ACCEPTED)
 def forgot_password(
-    payload: ForgotPassword, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+    payload: ForgotPassword,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    audit: Auditor = Depends(get_auditor),
 ) -> Message:
     """Ask an admin to reset your password (no email server: the admin sets a
     new one on the Users page and tells you). The reply is the same whether
@@ -115,6 +138,9 @@ def forgot_password(
         user.password_reset_requested_at = datetime.now(UTC)
         db.commit()
         background_tasks.add_task(manager.broadcast, {"type": "account_request", "kind": "password_reset"})
+    audit.log(
+        None, "auth.password_reset_request", commit=True, actor_username=payload.username[:50], matched=user is not None
+    )
     return Message(
         detail="If that account exists, an admin has been asked to reset its password. They will give you the new one."
     )
@@ -130,6 +156,7 @@ def change_password(
     payload: PasswordChange,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> Token:
     """Change your own password. Other sessions of the account are logged out;
     this one continues with the returned token."""
@@ -139,6 +166,7 @@ def change_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="The new password must differ from the current one"
         )
+    audit.log(current_user, "auth.password_change", "user", current_user.id)
     current_user.hashed_password = hash_password(payload.new_password)
     current_user.password_changed_at = datetime.now(UTC)
     db.commit()

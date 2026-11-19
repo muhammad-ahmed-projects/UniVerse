@@ -8,9 +8,10 @@ from app.api.deps import get_current_user, require_role
 from app.db.session import get_db
 from app.models.camera import Camera, CameraStatus
 from app.models.camera_settings import CameraSettings
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.camera import CameraCreate, CameraHeartbeat, CameraOut, CameraUpdate
 from app.schemas.camera_settings import CameraSettingsOut, CameraSettingsUpdate
+from app.services.audit import Auditor, get_auditor
 from app.services.camera_runner import camera_runner
 from app.services.frame_store import frame_store
 from app.services.ws_manager import manager
@@ -46,9 +47,16 @@ def get_camera(camera_id: int, db: Session = Depends(get_db)) -> Camera:
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
-def create_camera(payload: CameraCreate, db: Session = Depends(get_db)) -> Camera:
+def create_camera(
+    payload: CameraCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> Camera:
     camera = Camera(name=payload.name, location=payload.location, stream_source=payload.stream_source)
     db.add(camera)
+    db.flush()
+    audit.log(actor, "camera.create", "camera", camera.id, name=camera.name)
     db.commit()
     db.refresh(camera)
     return camera
@@ -64,12 +72,15 @@ def update_camera(
     payload: CameraUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> Camera:
     camera = _get_camera_or_404(camera_id, db)
     changes = payload.model_dump(exclude_unset=True)
     status_changed = "status" in changes and changes["status"] != camera.status
     for field, value in changes.items():
         setattr(camera, field, value)
+    audit.log(actor, "camera.update", "camera", camera.id, name=camera.name, fields=sorted(changes))
     db.commit()
     db.refresh(camera)
 
@@ -155,12 +166,18 @@ async def publish_frame(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
-def delete_camera(camera_id: int, db: Session = Depends(get_db)) -> None:
+def delete_camera(
+    camera_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> None:
     """Deletes the camera and, through the database cascade, its alerts,
     incidents and settings. Any analyses running for it are stopped first."""
     camera = _get_camera_or_404(camera_id, db)
     camera_runner.forget(camera.id)
     frame_store.drop(camera.id)
+    audit.log(actor, "camera.delete", "camera", camera.id, name=camera.name)
     db.delete(camera)
     db.commit()
 
@@ -198,6 +215,8 @@ def update_camera_settings(
     camera_id: int,
     payload: CameraSettingsUpdate,
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> CameraSettings:
     _get_camera_or_404(camera_id, db)
     settings = db.query(CameraSettings).filter(CameraSettings.camera_id == camera_id).first()
@@ -206,6 +225,7 @@ def update_camera_settings(
         db.add(settings)
     for field, value in payload.model_dump().items():
         setattr(settings, field, value)
+    audit.log(actor, "camera.settings_update", "camera", camera_id)
     db.commit()
     db.refresh(settings)
     return settings

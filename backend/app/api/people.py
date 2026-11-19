@@ -8,9 +8,10 @@ from app.api.deps import get_current_user, require_role
 from app.db.session import get_db
 from app.models.camera import Camera
 from app.models.person import FaceEmbedding, Person
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.person import FaceEmbeddingOut, FaceSampleOut, PersonCreate, PersonOut, SightingCreate
 from app.services import images, media_store
+from app.services.audit import Auditor, get_auditor
 from app.services.face_encoder import FaceEncoder, get_face_encoder
 from app.services.ws_manager import manager
 
@@ -54,20 +55,33 @@ def get_person(person_id: int, db: Session = Depends(get_db)) -> Person:
 
 
 @router.post("", response_model=PersonOut, status_code=status.HTTP_201_CREATED, dependencies=[admin_only])
-def create_person(payload: PersonCreate, db: Session = Depends(get_db)) -> Person:
+def create_person(
+    payload: PersonCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> Person:
     """The consent-based registration record. Face photos are added next,
     with POST /people/{id}/faces."""
     person = Person(name=payload.name, notes=payload.notes)
     db.add(person)
+    db.flush()
+    audit.log(actor, "person.create", "person", person.id, name=person.name)
     db.commit()
     db.refresh(person)
     return person
 
 
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[admin_only])
-def delete_person(person_id: int, db: Session = Depends(get_db)) -> None:
+def delete_person(
+    person_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> None:
     person = _get_person_or_404(person_id, db)
     thumbnails = [face.image_file for face in person.faces]
+    audit.log(actor, "person.delete", "person", person.id, name=person.name)
     db.delete(person)  # face_embeddings rows cascade in the database
     db.commit()
     for name in thumbnails:
@@ -85,6 +99,8 @@ def add_face(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     encoder: FaceEncoder = Depends(get_face_encoder),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> FaceEmbedding:
     """Register one face photo: detect the face, store its ArcFace embedding
     (what the recognizer matches against) and a cropped thumbnail."""
@@ -123,6 +139,8 @@ def add_face(
 
     sample = FaceEmbedding(person_id=person.id, embedding=face.embedding, image_file=file_name)
     db.add(sample)
+    db.flush()
+    audit.log(actor, "face.add", "person", person.id, name=person.name, face_id=sample.id)
     try:
         db.commit()
     except Exception:
@@ -138,19 +156,33 @@ def list_faces(person_id: int, db: Session = Depends(get_db)) -> list[FaceEmbedd
 
 
 @router.get("/{person_id}/faces/{face_id}/image", response_class=FileResponse, dependencies=[admin_only])
-def get_face_image(person_id: int, face_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def get_face_image(
+    person_id: int,
+    face_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> FileResponse:
     face = _get_face_or_404(person_id, face_id, db)
     path = media_store.path_for("faces", face.image_file) if face.image_file else None
     if path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Face image not found")
     # no-store: face thumbnails are biometric data, so keep them out of the browser cache.
+    audit.log(actor, "face.view", "person", person_id, commit=True, face_id=face_id)
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.delete("/{person_id}/faces/{face_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[admin_only])
-def delete_face(person_id: int, face_id: int, db: Session = Depends(get_db)) -> None:
+def delete_face(
+    person_id: int,
+    face_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> None:
     face = _get_face_or_404(person_id, face_id, db)
     file_name = face.image_file
+    audit.log(actor, "face.delete", "person", person_id, face_id=face_id)
     db.delete(face)
     db.commit()
     media_store.delete("faces", file_name)

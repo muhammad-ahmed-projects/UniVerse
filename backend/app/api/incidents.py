@@ -10,6 +10,7 @@ from app.models.camera import Camera
 from app.models.incident import Incident
 from app.models.user import User
 from app.schemas.incident import IncidentCreate, IncidentOut, IncidentStatus
+from app.services.audit import Auditor, get_auditor
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -53,6 +54,8 @@ def create_incident(
     payload: IncidentCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> Incident:
     """Promote an AI alert to a human-reviewed incident. Per the proposal's
     privacy requirement, this is an explicit human action -- alerts never
@@ -89,7 +92,14 @@ def create_incident(
 
     if source_alert is not None:
         source_alert.incident_id = incident.id
+        # Promoting an alert is a human confirming it was a real event.
+        source_alert.review_status = "confirmed"
+        source_alert.reviewed_by = actor.id
+        source_alert.reviewed_at = datetime.now(UTC)
 
+    audit.log(
+        actor, "incident.create", "incident", incident.id, title=incident.title, source_alert_id=payload.source_alert_id
+    )
     db.commit()
     db.refresh(incident)
 
@@ -105,6 +115,7 @@ def acknowledge_incident(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> Incident:
     incident = _get_incident_or_404(incident_id, db, lock=True)
     if incident.status != "open":
@@ -113,6 +124,7 @@ def acknowledge_incident(
     incident.status = "acknowledged"
     incident.acknowledged_by = current_user.id
     incident.acknowledged_at = datetime.now(UTC)
+    audit.log(current_user, "incident.acknowledge", "incident", incident.id)
     db.commit()
     db.refresh(incident)
 
@@ -128,6 +140,7 @@ def resolve_incident(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
 ) -> Incident:
     incident = _get_incident_or_404(incident_id, db, lock=True)
     if incident.status == "resolved":
@@ -141,6 +154,7 @@ def resolve_incident(
     incident.status = "resolved"
     incident.resolved_by = current_user.id
     incident.resolved_at = datetime.now(UTC)
+    audit.log(current_user, "incident.resolve", "incident", incident.id)
     db.commit()
     db.refresh(incident)
 

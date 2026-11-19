@@ -12,6 +12,11 @@ class CameraSettingsUpdate(BaseModel):
     tamper_covered_sharpness_ratio: float = Field(gt=0, le=1, default=0.3)
     tamper_defocus_sharpness_ratio: float = Field(gt=0, le=1, default=0.35)
     face_match_threshold: float = Field(ge=0.2, le=0.9, default=0.45)
+    # Unusual activity; 0 turns a rule off.
+    crowd_threshold: int = Field(ge=0, le=100, default=5)
+    running_speed: float = Field(ge=0, le=5, default=0.6)
+    abandoned_seconds: float = Field(ge=0, le=3600, default=30.0)
+    fall_seconds: float = Field(ge=0, le=60, default=2.0)
 
     @model_validator(mode="after")
     def check_roi_ordering(self) -> "CameraSettingsUpdate":

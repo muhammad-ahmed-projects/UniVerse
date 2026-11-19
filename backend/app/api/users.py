@@ -16,7 +16,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_role
+from app.api.deps import get_current_user, require_role
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.incident import Incident
@@ -29,6 +29,7 @@ from app.schemas.auth import (
     UserRegister,
     UserUpdate,
 )
+from app.services.audit import Auditor, get_auditor
 
 router = APIRouter(prefix="/users", tags=["users"])
 admin = require_role(UserRole.ADMIN)
@@ -43,6 +44,16 @@ def _get_user_or_404(user_id: int, db: Session) -> User:
 
 def _other_active_admins(db: Session, user_id: int) -> int:
     return db.query(User).filter(User.role == UserRole.ADMIN, User.is_active.is_(True), User.id != user_id).count()
+
+
+def _flush_or_conflict(db: Session) -> None:
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username or email is already in use"
+        ) from None
 
 
 def _commit_or_conflict(db: Session) -> None:
@@ -70,7 +81,13 @@ def account_request_counts(db: Session = Depends(get_db)) -> AccountRequestCount
 
 
 @router.post("/{user_id}/approve", response_model=UserOut, dependencies=[Depends(admin)])
-def approve_signup(user_id: int, payload: ApproveRequest, db: Session = Depends(get_db)) -> User:
+def approve_signup(
+    user_id: int,
+    payload: ApproveRequest,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> User:
     """Accept an account request with the chosen role (reject = DELETE /users/{id})."""
     user = _get_user_or_404(user_id, db)
     if not user.is_pending:
@@ -78,22 +95,34 @@ def approve_signup(user_id: int, payload: ApproveRequest, db: Session = Depends(
     user.is_pending = False
     user.is_active = True
     user.role = payload.role
+    audit.log(actor, "user.approve", "user", user.id, username=user.username, role=payload.role.value)
     db.commit()
     db.refresh(user)
     return user
 
 
 @router.post("/{user_id}/dismiss-reset", response_model=UserOut, dependencies=[Depends(admin)])
-def dismiss_reset_request(user_id: int, db: Session = Depends(get_db)) -> User:
+def dismiss_reset_request(
+    user_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> User:
     user = _get_user_or_404(user_id, db)
     user.password_reset_requested_at = None
+    audit.log(actor, "user.reset_request_dismiss", "user", user.id, username=user.username)
     db.commit()
     db.refresh(user)
     return user
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(admin)])
-def create_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
+def create_user(
+    payload: UserRegister,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> User:
     if db.query(User).filter(User.username == payload.username).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered")
     user = User(
@@ -103,6 +132,8 @@ def create_user(payload: UserRegister, db: Session = Depends(get_db)) -> User:
         role=payload.role,
     )
     db.add(user)
+    _flush_or_conflict(db)  # assigns user.id for the audit entry; a taken email fails here
+    audit.log(actor, "user.create", "user", user.id, username=user.username, role=user.role.value)
     _commit_or_conflict(db)
     db.refresh(user)
     return user
@@ -114,6 +145,7 @@ def update_user(
     payload: UserUpdate,
     db: Session = Depends(get_db),
     current: User = Depends(admin),
+    audit: Auditor = Depends(get_auditor),
 ) -> User:
     user = _get_user_or_404(user_id, db)
     if user.is_pending:
@@ -139,24 +171,41 @@ def update_user(
         )
     for field, value in changes.items():
         setattr(user, field, value)
+    audit.log(
+        current,
+        "user.update",
+        "user",
+        user.id,
+        username=user.username,
+        changes={k: (v.value if hasattr(v, "value") else v) for k, v in changes.items()},
+    )
     _commit_or_conflict(db)
     db.refresh(user)
     return user
 
 
 @router.post("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(admin)])
-def reset_password(user_id: int, payload: PasswordReset, db: Session = Depends(get_db)) -> None:
+def reset_password(
+    user_id: int,
+    payload: PasswordReset,
+    db: Session = Depends(get_db),
+    actor: User = Depends(get_current_user),
+    audit: Auditor = Depends(get_auditor),
+) -> None:
     """Set a new password for an account; every existing session of it is logged
     out, and an open forgot-password request is closed."""
     user = _get_user_or_404(user_id, db)
     user.hashed_password = hash_password(payload.new_password)
     user.password_changed_at = datetime.now(UTC)
     user.password_reset_requested_at = None
+    audit.log(actor, "user.password_reset", "user", user.id, username=user.username)
     db.commit()
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Depends(admin)) -> None:
+def delete_user(
+    user_id: int, db: Session = Depends(get_db), current: User = Depends(admin), audit: Auditor = Depends(get_auditor)
+) -> None:
     user = _get_user_or_404(user_id, db)
     if user.id == current.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You can't delete your own account")
@@ -173,5 +222,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Dep
             detail="This account has reviewed incidents, so deleting it would erase who reviewed them. "
             "Deactivate it instead.",
         )
+    audit.log(current, "user.delete", "user", user.id, username=user.username)
     db.delete(user)
     db.commit()

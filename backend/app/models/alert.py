@@ -24,6 +24,11 @@ class Alert(Base):
     extra_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True)
     triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Human verdict on the detection: "confirmed" (real event) or "false_alarm".
+    # NULL = not reviewed yet. Feeds the false-alert rate / precision report.
+    review_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # selectin: list endpoints load every alert's images in one extra query, not one per alert.
     images: Mapped[list["AlertImage"]] = relationship(
