@@ -3,6 +3,7 @@ import {
   CameraIcon,
   GearIcon,
   LayoutGridIcon,
+  ListIcon,
   OctagonAlertIcon,
   UserCircleIcon,
   UsersIcon,
@@ -50,6 +51,12 @@ export const navItems: NavItem[] = [
     icon: <UserCircleIcon className="size-6" />,
     key: "users",
     path: "/users",
+    adminOnly: true,
+  },
+  {
+    icon: <ListIcon className="size-6" />,
+    key: "auditLog",
+    path: "/audit-log",
     adminOnly: true,
   },
 ];

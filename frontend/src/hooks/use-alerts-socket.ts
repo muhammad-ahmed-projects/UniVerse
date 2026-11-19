@@ -28,6 +28,11 @@ export type SocketMessage =
   | { type: "camera_runner"; camera_id: number; running: boolean }
   | { type: "account_request"; kind: "signup" | "password_reset" }
   | {
+      type: "alert_review";
+      alert_id: number;
+      review_status: "confirmed" | "false_alarm" | null;
+    }
+  | {
       type: "person_seen";
       person_id: number;
       camera_id: number;

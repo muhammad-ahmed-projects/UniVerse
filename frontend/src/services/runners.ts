@@ -42,9 +42,9 @@ export const ANALYSES: {
 }[] = [
   {
     script: "roi_loitering",
-    label: "People, restricted area & loitering",
+    label: "People, restricted area & unusual activity",
     description:
-      "Detects and tracks people; alerts when someone enters the restricted zone or stays too long.",
+      "Tracks people; alerts on entering the restricted zone, staying too long, crowds, running, falls and unattended bags.",
   },
   {
     script: "face_recognition",

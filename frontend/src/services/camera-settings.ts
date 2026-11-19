@@ -13,6 +13,11 @@ export interface CameraSettings {
   tamper_defocus_sharpness_ratio: number;
   /** Cosine similarity (0.2-0.9) a face needs to match a registered person. */
   face_match_threshold: number;
+  /** Unusual activity; 0 turns a rule off. */
+  crowd_threshold: number;
+  running_speed: number;
+  abandoned_seconds: number;
+  fall_seconds: number;
 }
 
 export type CameraSettingsInput = Omit<CameraSettings, "camera_id">;

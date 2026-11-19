@@ -2,6 +2,7 @@ import ProtectedRoute from "@/components/auth/protected-route";
 import AppLayout from "@/components/layout/app-layout";
 import { Error404Page } from "@/pages/main/pages";
 import AlertsPage from "@/pages/main/surveillance/alerts";
+import AuditLogPage from "@/pages/main/surveillance/audit-log";
 import CamerasPage from "@/pages/main/surveillance/cameras";
 import IncidentsPage from "@/pages/main/surveillance/incidents";
 import LiveViewPage from "@/pages/main/surveillance/live";
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/people" element={<PeoplePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/audit-log" element={<AuditLogPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>
       </Route>

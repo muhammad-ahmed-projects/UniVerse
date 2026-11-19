@@ -17,7 +17,46 @@ export interface Alert {
   incident_id: number | null;
   triggered_at: string;
   images: AlertImage[];
+  /** Operator verdict; null = not reviewed yet. */
+  review_status: ReviewStatus | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
 }
+
+export type ReviewStatus = "confirmed" | "false_alarm";
+
+export interface ReviewCounts {
+  total: number;
+  confirmed: number;
+  false_alarm: number;
+  unreviewed: number;
+  /** confirmed / reviewed; null until something is reviewed. */
+  precision: number | null;
+  false_alarm_rate: number | null;
+}
+
+export interface ReviewStats {
+  overall: ReviewCounts;
+  by_type: (ReviewCounts & { alert_type: string })[];
+}
+
+/** Readable names for alert types (the API sends the codes). */
+export const ALERT_TYPE_LABELS: Record<string, string> = {
+  ROI_ENTRY: "Restricted area entry",
+  LOITERING: "Loitering",
+  CROWD: "Crowd",
+  RUNNING: "Running",
+  FALL_DETECTED: "Possible fall",
+  ABANDONED_OBJECT: "Unattended object",
+  UNKNOWN_FACE: "Unknown face",
+  TAMPER_COVERED: "Camera covered",
+  TAMPER_MOVED: "Camera moved",
+  TAMPER_DEFOCUSED: "Camera out of focus",
+  CAMERA_OFFLINE: "Camera offline",
+  CAMERA_ONLINE: "Camera back online",
+};
+
+export const alertTypeLabel = (type: string) => ALERT_TYPE_LABELS[type] ?? type;
 
 export const alertImagePath = (image: AlertImage) =>
   `/alerts/${image.alert_id}/images/${image.id}`;
@@ -37,4 +76,9 @@ export const alertsApi = {
     return apiClient.get<Alert[]>(`/alerts${suffix}`);
   },
   get: (id: number) => apiClient.get<Alert>(`/alerts/${id}`),
+  review: (id: number, reviewStatus: ReviewStatus | null) =>
+    apiClient.patch<Alert>(`/alerts/${id}/review`, {
+      review_status: reviewStatus,
+    }),
+  reviewStats: () => apiClient.get<ReviewStats>("/alerts/review-stats"),
 };

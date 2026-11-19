@@ -34,6 +34,10 @@ const DEFAULTS: CameraSettingsInput = {
   tamper_covered_sharpness_ratio: 0.3,
   tamper_defocus_sharpness_ratio: 0.35,
   face_match_threshold: 0.45,
+  crowd_threshold: 5,
+  running_speed: 0.6,
+  abandoned_seconds: 30,
+  fall_seconds: 2,
 };
 
 function NumberField({
@@ -287,6 +291,54 @@ export default function SettingsPage() {
                 Similarity (0.20-0.90) a face needs to count as a registered
                 person. Higher means fewer wrong matches but more "Unknown"
                 labels. 0.45 is a good start.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
+                Unusual Activity
+              </h4>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <NumberField
+                  label="Crowd: people"
+                  value={form.crowd_threshold}
+                  onChange={(v) => update("crowd_threshold", Math.round(v))}
+                  step={1}
+                  min={0}
+                  max={100}
+                />
+                <NumberField
+                  label="Running: speed"
+                  value={form.running_speed}
+                  onChange={(v) => update("running_speed", v)}
+                  step={0.1}
+                  min={0}
+                  max={5}
+                />
+                <NumberField
+                  label="Unattended bag (s)"
+                  value={form.abandoned_seconds}
+                  onChange={(v) => update("abandoned_seconds", v)}
+                  step={5}
+                  min={0}
+                  max={3600}
+                />
+                <NumberField
+                  label="Fall: lying (s)"
+                  value={form.fall_seconds}
+                  onChange={(v) => update("fall_seconds", v)}
+                  step={0.5}
+                  min={0}
+                  max={60}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-gray-400">
+                Crowd: this many people in view at once. Running: speed in frame
+                widths per second (0.6 = crossing the picture in under 2
+                seconds). Unattended bag: a bag or suitcase still and alone this
+                long. Fall: someone who was standing stays lying down this long.
+                Set any of them to 0 to turn that alert off. Used by the
+                "People, restricted area & unusual activity" analysis.
               </p>
             </div>
 
